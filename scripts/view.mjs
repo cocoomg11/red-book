@@ -6,7 +6,7 @@
  * Pages: Tools (session, board, check, online, past) and Settings (features, tools, health, data). The session dashboard is the
  * default page.
  */
-import { esc, plural } from "./const.mjs";
+import { esc, plural, toolkitTitle } from "./const.mjs";
 import { navItem, statusLine, statusLines, badge, dot, icon, TONES } from "../vendor/wanderers-core/index.mjs";
 import { TYPES, durationText } from "./session-model.mjs";
 import { isFailure, todoId, toLocalInput } from "./board-model.mjs";
@@ -235,7 +235,7 @@ export function boardPageHTML(m, look, opts = {}) {
     return `<li class="rb-brow${d.exists ? "" : " rb-gone"}"><span class="wc-grow"><a class="rb-open" data-action="openUuid" data-uuid="${esc(uuid)}">${esc(label || d.name || uuid)}</a>${d.exists ? "" : ` ${badge("bad", t("Board.missing"), { small: true })}`}${extra}</span>${acts}</li>`;
   };
   const list = (items, none) => items.length ? `<ul class="wc-panel-list">${items.join("")}</ul>` : `<p class="wc-hint rb-pad">${esc(none)}</p>`;
-  const quests = !m.toolkit ? `<p class="wc-hint rb-pad">${esc(t("Board.noToolkit"))}</p>`
+  const quests = !m.toolkit ? `<p class="wc-hint rb-pad">${esc(t("Board.noToolkit", { name: toolkitTitle() }))}</p>`
     : list(m.quests.map(q => row(q.uuid, q.name, `${q.zone ? ` <span class="wc-chip">${esc(q.zone)}</span>` : ""}${q.next.length ? `<ul class="rb-next">${q.next.map(x => `<li>${esc(x)}</li>`).join("")}${q.more ? `<li class="wc-hint">${esc(t("Board.andMore", { n: q.more }))}</li>` : ""}</ul>` : ""}`)), t("Board.noQuests"));
   const last = m.last ? `<div class="wc-panel-body"><p>${`<a class="rb-open" data-action="openUuid" data-uuid="${esc(m.last.uuid)}">${esc(m.last.name)}</a>`}${m.last.open ? ` ${badge("live", t("Session.live"), { small: true, dot: true })}` : ""}</p>
       ${(m.last.summary?.notable ?? []).length ? `<ul class="rb-next">${m.last.summary.notable.slice(0, 8).map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}

@@ -308,3 +308,16 @@ test("features 0.5.0: needs are declared (journeys and quest events need the log
   assert.deepEqual([...f("prepList").needs], ["prepBoard", "sceneCheck"]);
   assert.deepEqual([...f("openKey").needs], []);
 });
+
+test("toolkit name: the installed module's title, with a Wanderer's fallback", async () => {
+  const C = await import("../scripts/const.mjs");
+  const g = title => ({ modules: { get: id => id === "wayfarers-toolkit" ? { title } : undefined } });
+  assert.equal(C.toolkitTitle(g("Wayfarer's Toolkit")), "Wayfarer's Toolkit");
+  assert.equal(C.toolkitTitle(g("Wanderer's Toolkit")), "Wanderer's Toolkit");
+  assert.equal(C.toolkitTitle(g(undefined)), "Wanderer's Toolkit");
+  assert.equal(C.toolkitTitle({}), "Wanderer's Toolkit");
+  assert.match(C.toolkitHealthText(true, "X"), /^X is active/);
+  assert.match(C.toolkitHealthText(false), /^Wanderer's Toolkit isn't active/);
+  const { readFileSync } = await import("node:fs");
+  for (const f of ["scripts/health.mjs", "scripts/view.mjs", "scripts/session-model.mjs", "lang/en.json"]) assert.ok(!/Wayfarer/.test(readFileSync(new URL(`../${f}`, import.meta.url), "utf8")), `${f}: no hard-coded old name`);
+});

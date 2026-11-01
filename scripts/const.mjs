@@ -15,6 +15,16 @@ export const HOOKS = {
 };
 /** The companion module whose quests, flights, travel and loot rolls the session log can read (optional). */
 export const TOOLKIT_ID = "wayfarers-toolkit";
+/** The toolkit's display name as the installed module spells it (it was renamed in 1.27.2), else this fallback. */
+export const TOOLKIT_TITLE = "Wanderer's Toolkit";
+/** @param {any} [g] the Foundry `game` (default: the global one) */
+export function toolkitTitle(g = /** @type {any} */ (globalThis).game) {
+  try { const t = g?.modules?.get?.(TOOLKIT_ID)?.title; return typeof t === "string" && t.trim() ? t.trim() : TOOLKIT_TITLE; } catch { return TOOLKIT_TITLE; }
+}
+/** The health line about the toolkit. @param {boolean} on @param {string} [title] */
+export function toolkitHealthText(on, title = TOOLKIT_TITLE) {
+  return on ? `${title} is active: quests, travel, flights and loot rolls are logged and quests feed the board.` : `${title} isn't active: the board shows no quests and its events aren't logged.`;
+}
 /** Monk's Active Tiles, read (never written) by the scene check. */
 export const MATT_ID = "monks-active-tiles";
 

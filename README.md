@@ -7,7 +7,7 @@ A Foundry VTT module (v13 and v14, any game system, extra support for dnd5e) tha
 - **Scene check**: a read-only audit of your scenes before the players see them, scene list on the left, findings on the right.
 - **Session Start**: pick the scene, activate it, unpause and start the log in one step.
 - **Who's online**: a small panel on Hub scenes that says when everyone's here; it can be moved and folded.
-- **0.5.0**: quest progress and journeys from Wayfarer's Toolkit in the log and the recap, a prep list on the board fed by the scene check, a *Next session* date, an *Open Red Book* key binding, and optional Discord posts (off by default).
+- **0.5.0**: quest progress and journeys from Wanderer's Toolkit in the log and the recap, a prep list on the board fed by the scene check, a *Next session* date, an *Open Red Book* key binding, and optional Discord posts (off by default).
 
 Every tool can be turned off. A turned-off tool registers nothing. With **Wanderer's Satchel** installed, Red Book also shows up in its hub (control panel, health check, debug logging).
 
@@ -45,7 +45,7 @@ Every tool can be turned off. A turned-off tool registers nothing. With **Wander
 | Discord posts | `discord` | (0.5.0; **off by default**) Posts to a Discord channel through a webhook: a summary when a session ends, the recap when you share it (optional), the next session's date when you set it. See [Discord posts](#discord-posts). |
 | Scene readiness check | `sceneCheck` | A read-only audit of a scene, a folder or every scene: missing images and sounds, walls and doors, lights, token vision and links, NPC stats, map notes, linked journals, active tile actions and player characters. Each finding has a button that opens the thing to fix. GM only. |
 
-Optional: with **Wayfarer's Toolkit** active, its quests feed the board and its quests, objectives, travel, flights and loot rolls are logged too (its map pins are left out of the scene check). With **Monk's Active Tiles** active, tile actions that point at deleted documents are reported.
+Optional: with **Wanderer's Toolkit** active, its quests feed the board and its quests, objectives, travel, flights and loot rolls are logged too (its map pins are left out of the scene check). With **Monk's Active Tiles** active, tile actions that point at deleted documents are reported.
 
 ## Quick start
 
@@ -72,7 +72,7 @@ Optional: with **Wayfarer's Toolkit** active, its quests feed the board and its 
   - journals and pages shown to players;
   - NPCs met: non-player actors with a visible token on the active scene while a player is connected, once per session;
   - level-ups (dnd5e: total level; other systems: `system.details.level` when present);
-  - Wayfarer's Toolkit: quests given, completed, failed, reopened, objectives ticked, flights and hex travel (from its Travel Log page), finished loot rolls.
+  - Wanderer's Toolkit: quests given, completed, failed, reopened, objectives ticked, flights and hex travel (from its Travel Log page), finished loot rolls.
 - **End session** adds a **summary** at the top: how long you played and how much in-world time passed, counts per kind, notable moments (kills, level-ups, quests, combats) and open threads (GM-only threads in a secret block).
 - **Quest events and journeys (0.5.0)**: with the toolkit, quest lines and Travel lines come from its quest journals and its hooks (see [Integrations](#integrations)); each change is logged once. Quest lines get their own *Quests* list in the summary, so they show in the recap (except GM-only ones). The timeline has *Quests* and *Travel* filter chips.
 - **Share as recap** (journal header menu on a session log, or the Red Book window's Past sessions page): shows every list line of the session's pages with a tick box. Untick what players shouldn't see. Red Book then creates or updates a separate journal **Recap: <session name>** in the *Session Recaps* folder that players can observe. Secret blocks, GM-only notes, HTML comments and document links are always left out. The GM log itself is never made visible.
@@ -83,7 +83,7 @@ Optional: with **Wayfarer's Toolkit** active, its quests feed the board and its 
 
 Open it with the thumbtack button in the token controls, the Red Book window's **Board** page or `api.board.open()`. Three columns: quests and the last session; NPCs, journals and scenes; your pins.
 
-- **Active quests** (Wayfarer's Toolkit's quest log, when that module is active) with their next unticked objectives.
+- **Active quests** (Wanderer's Toolkit's quest log, when that module is active) with their next unticked objectives.
 - **NPCs, Journals, Scenes**: every document linked from those quests (giver, description, objectives), with the quests that link it. Deleted documents are shown struck through.
 - **Last session**: its counts, notable moments and open threads.
 - **Pinned**: drop actors, journals, pages, scenes, roll tables, items, playlists or macros on it (up to 50). Click × to unpin.
@@ -133,12 +133,12 @@ Click the flag button in the token controls (GM), **Session Start…** on the Re
 - **Moving it**: drag the panel by its header. Each browser keeps its own spot, always on screen. Double-click the header to put it back where the *Panel position* setting says.
 - **Folding it**: the arrow button in the header (or Tab to it and press Enter or Space) folds the panel to its header, which still shows the count (for example 3/4). Each browser remembers its choice.
 - The Red Book window's **Online** page, its *Open as a window* button (or `api.online.open()`) opens the same board as a window, for anyone.
-- **Hooks for world scripts**: `red-book.playerCountChanged` fires whenever the count changes, and `red-book.allPlayersOnline` when everyone's here. They fire on every client, so a script that changes documents should check `game.users.activeGM?.isSelf`. Scripts written for Wayfarer's Toolkit keep working: the old names `wayfarers-toolkit.playerCountChanged` / `.allPlayersOnline` fire too, unless the toolkit still has its own Who's online (then the toolkit fires them) or you turn off *Also fire the old hook names*.
-- **Moving from Wayfarer's Toolkit**: on the GM's first load of 0.3.0, Red Book copies the toolkit's Who's online and Session Start settings and its Hub scene ticks. The toolkit's own data stays as it was. Turn the toolkit's copies of these tools off so you don't get two panels.
+- **Hooks for world scripts**: `red-book.playerCountChanged` fires whenever the count changes, and `red-book.allPlayersOnline` when everyone's here. They fire on every client, so a script that changes documents should check `game.users.activeGM?.isSelf`. Scripts written for Wanderer's Toolkit keep working: the old names `wayfarers-toolkit.playerCountChanged` / `.allPlayersOnline` fire too, unless the toolkit still has its own Who's online (then the toolkit fires them) or you turn off *Also fire the old hook names*.
+- **Moving from Wanderer's Toolkit**: on the GM's first load of 0.3.0, Red Book copies the toolkit's Who's online and Session Start settings and its Hub scene ticks. The toolkit's own data stays as it was. Turn the toolkit's copies of these tools off so you don't get two panels.
 
 ## Integrations
 
-Red Book listens to two hooks from **Wayfarer's Toolkit** (when a toolkit version that fires them is active; older versions simply don't fire them and Red Book falls back to reading the quest journals and the Travel Log page). Both are fired with `Hooks.callAll` and carry ids and display strings only. Only the recording GM tab logs; another GM tab that hears them sends them on (GM-only, schema-checked requests); players' clients ignore them.
+Red Book listens to two hooks from **Wanderer's Toolkit** (when a toolkit version that fires them is active; older versions simply don't fire them and Red Book falls back to reading the quest journals and the Travel Log page). Both are fired with `Hooks.callAll` and carry ids and display strings only. Only the recording GM tab logs; another GM tab that hears them sends them on (GM-only, schema-checked requests); players' clients ignore them.
 
 | Hook | Payload | What Red Book does |
 |---|---|---|

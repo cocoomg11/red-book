@@ -37,7 +37,7 @@ export const TYPES = {
 export const GROUPS = {
   scene: "Scenes activated", combat: "Combats (start, end, combatants)", downs: "Characters at 0 HP and creatures killed",
   rest: "Rests (dnd5e)", loot: "Items and coin on player characters and the party actor", time: "World time advanced",
-  journal: "Journals shown to players", npc: "NPCs met", level: "Level-ups", toolkit: "Quests, travel, flights and loot rolls (Wayfarer's Toolkit)"
+  journal: "Journals shown to players", npc: "NPCs met", level: "Level-ups", toolkit: "Quests, travel, flights and loot rolls (from the toolkit)"
 };
 export const groupOf = type => TYPES[type]?.group ?? type;
 /** Whether events of `type` are logged, given the list of turned-off groups. Notes and session lines always are. */
