@@ -11,19 +11,9 @@ permissions:
   contents: read
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      # No install step: the tests use only Node's built-in test runner and the module's own scripts.
-      - name: Syntax check every script
-        run: npm run check
-
-      - name: Unit tests
-        run: npm test
-
+  # wanderers-core's reusable checks: the vendored core matches its pin (and the published release), then syntax check, ESLint and
+  # unit tests. The JSDoc type check is off until the older tool files are JSDoc-clean (npm run types lists what's left).
+  checks:
+    uses: cocoomg11/wanderers-core/.github/workflows/module-checks.yml@v0.2.0
+    with:
+      types: false

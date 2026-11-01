@@ -10,7 +10,7 @@ test("every check rule and log group has a setting; keys unique", () => {
   assert.equal(new Set(keys).size, keys.length);
   for (const r of Object.keys(RULES)) assert.ok(keys.includes(`check-${r}`));
   for (const g of Object.keys(GROUPS)) assert.ok(keys.includes(`log-${g}`));
-  assert.deepEqual(S.RECORDS, ["openSession", "boardPins"]);
+  assert.deepEqual(S.RECORDS, ["openSession", "migrations", "onlineHudPos", "boardPins"]);
 });
 test("tab rows and conversion", () => {
   const { basic, advanced } = S.tabRows("check");
@@ -41,11 +41,11 @@ test("cleanup plan: only our documents and flags", () => {
   assert.deepEqual(K.emptyFolders(p, { sessions: true }, { f1: ["s", "x"] }), []);
   assert.deepEqual(K.emptyFolders(p, { sessions: false }, { f1: ["s"] }), []);
   const dry = K.dryRun(p); assert.equal(dry.length, K.CATEGORIES.length); assert.match(dry[0].text, /: 1 \(Session 1\)$/);
+  assert.equal(dry.find(r => r.key === "flags").ticked, true);
 });
 
-test("feature registry: three tools, stable keys, unknown ids count as on", async () => {
-  globalThis.game = { settings: { get: (ns, k) => k !== "feature-prepBoard" } };
+test("feature registry: five tools, stable keys, needs nothing from Foundry", async () => {
   const F = await import("../scripts/features.mjs");
-  assert.deepEqual(F.FEATURES.map(f => f.key), ["feature-sessionLog", "feature-prepBoard", "feature-sceneCheck"]);
-  assert.equal(F.on("sessionLog"), true); assert.equal(F.on("prepBoard"), false); assert.equal(F.on("whatever"), true);
+  assert.deepEqual(F.FEATURES.map(f => f.key), ["feature-sessionLog", "feature-prepBoard", "feature-sceneCheck", "feature-sessionStart", "feature-whosOnline"]);
+  assert.ok(F.FEATURES.every(f => f.default === true && f.hint));
 });

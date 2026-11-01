@@ -290,3 +290,9 @@ export function gateApi(api, isGM, deny) {
   }
   return out;
 }
+
+/** Whether a map note is one of the companion toolkit's map pins (flags.<toolkit>.pin): the scene check leaves those out. */
+export function isToolkitPin(note, toolkitId = "wayfarers-toolkit") {
+  const f = note?.flags?.[toolkitId] ?? note?._source?.flags?.[toolkitId];
+  return !!(f && typeof f === "object" && f.pin && typeof f.pin === "object");
+}

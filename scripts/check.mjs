@@ -4,9 +4,9 @@
  * with a jump-to-fix button; Export writes the report to a GM-only journal. Nothing in the checked scenes is ever changed, except
  * the GM's own list of ignored findings (flags.red-book.ignoredChecks on the scene, written only on a GM's click).
  */
-import { ID, MATT_ID, esc } from "./const.mjs";
+import { ID, MATT_ID, TOOLKIT_ID, esc } from "./const.mjs";
 import * as C from "./check-model.mjs";
-import { get } from "./settings.mjs";
+import { get } from "./core.mjs";
 import { offRules } from "./settings-model.mjs";
 import * as UI from "./ui.mjs";
 
@@ -43,7 +43,8 @@ export function sceneFacts(scene) {
     sounds: scene.sounds.map(s => ({ id: s.id, path: s.path ?? "" })),
     tiles: scene.tiles.map(t => ({ id: t.id, img: t.texture?.src ?? "" })),
     drawings: scene.drawings.map(d => ({ id: d.id, img: typeof d.texture === "string" ? d.texture : d.texture?.src ?? "" })),
-    notes: scene.notes.map(n => ({ id: n.id, label: n.label || n.entry?.name || "", img: n.texture?.src ?? "", entryId: n.entryId ?? "", entryExists: !!(n.entryId && game.journal.get(n.entryId)), pageId: n.pageId ?? "", pageExists: !!(n.pageId && game.journal.get(n.entryId)?.pages.get(n.pageId)) })),
+    // The toolkit's map pins are Note documents with flags.wayfarers-toolkit.pin: the party's own marks, never linked to a journal.
+    notes: scene.notes.filter(n => !C.isToolkitPin(n, TOOLKIT_ID)).map(n => ({ id: n.id, label: n.label || n.entry?.name || "", img: n.texture?.src ?? "", entryId: n.entryId ?? "", entryExists: !!(n.entryId && game.journal.get(n.entryId)), pageId: n.pageId ?? "", pageExists: !!(n.pageId && game.journal.get(n.entryId)?.pages.get(n.pageId)) })),
     playlist: {
       set: !!scene._source?.playlist, exists: !!playlist, soundSet: !!scene._source?.playlistSound, soundExists: !!scene.playlistSound,
       paths: playlist ? playlist.sounds.map(s => ({ playlistId: playlist.id, soundId: s.id, playlist: playlist.name, name: s.name, path: s.path ?? "" })) : []

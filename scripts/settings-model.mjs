@@ -2,10 +2,14 @@
  * Every Red Book setting except the feature toggles, in one table (pure; tested in Node). settings.mjs registers them; the control
  * panel shows them on their tab, Basic first and the rest under Advanced. Keys are stable across versions: never rename one.
  *
- * Row: { key, tab, advanced, feature, type: "bool" | "text" | "number", default, label, hint, min, max, step, hidden, client }
+ * Rows follow wanderers-core's settings table (defineSettings: checked once, frozen; feature keys are reserved).
+ * Row: { key, tab, advanced, feature, type: "bool" | "text" | "number" | "choice" | "object", default, label, hint, min, max, step, choices, hidden, client }
  */
+import { defineSettings, records, tabRows as coreTabRows, convert as coreConvert } from "../vendor/wanderers-core/index.mjs";
 import { GROUPS } from "./session-model.mjs";
 import { RULES, ruleKey } from "./check-model.mjs";
+import { FEATURE_KEYS } from "./features.mjs";
+import { COUNTS, POSITIONS } from "./online-model.mjs";
 
 export const TABS = [
   { id: "overview", label: "Overview", icon: "fa-solid fa-house" },
@@ -13,12 +17,14 @@ export const TABS = [
   { id: "session", label: "Session log", icon: "fa-solid fa-book", feature: "sessionLog" },
   { id: "board", label: "Next-session board", icon: "fa-solid fa-thumbtack", feature: "prepBoard" },
   { id: "check", label: "Scene check", icon: "fa-solid fa-clipboard-check", feature: "sceneCheck" },
+  { id: "start", label: "Session Start", icon: "fa-solid fa-flag-checkered", feature: "sessionStart" },
+  { id: "online", label: "Who's online", icon: "fa-solid fa-users", feature: "whosOnline" },
   { id: "data", label: "Data", icon: "fa-solid fa-broom" }
 ];
 
 const row = (tab, feature, key, type, def, label, hint, extra = {}) => ({ tab, feature, key, type, default: def, label, hint, advanced: false, ...extra });
 
-export const SETTINGS = [
+export const SETTINGS = defineSettings([
   row("session", "sessionLog", "sessionFolder", "text", "Session Log", "Session log folder", "Journal folder for the session logs (GM only). Made when the first session starts."),
   row("session", "sessionLog", "recapFolder", "text", "Session Recaps", "Recap folder", "Journal folder for the player recaps you share. Players get Observer on each recap."),
   row("session", "sessionLog", "startPrompt", "bool", true, "Ask to start a session on load", "When a GM loads the world with no session open, ask whether to start one."),
@@ -31,31 +37,29 @@ export const SETTINGS = [
   row("check", "sceneCheck", "checkTimeout", "number", 4, "File check time-out (seconds)", "A file that doesn't answer within this is reported as not checked rather than missing.", { advanced: true, min: 1, max: 30, step: 1 }),
   row("check", "sceneCheck", "checkConcurrency", "number", 4, "Files checked at once", "", { advanced: true, min: 1, max: 12, step: 1 }),
   ...Object.entries(RULES).map(([id, r]) => row("check", "sceneCheck", ruleKey(id), "bool", true, `Check: ${r.label}`, r.hint, { advanced: true })),
+  row("start", "sessionStart", "hiddenScenes", "text", "", "Scenes left out of the list", "A regular expression: scenes whose name matches aren't offered by Session Start (test maps, galleries). For exact names write ^(Name one|Name two)$. Blank: every scene is offered."),
+  row("online", "whosOnline", "onlineCount", "choice", "characters", "\"Everyone's here\" counts", "Who has to be connected: every player user, only players with an assigned character, or the users you list.", { choices: { ...COUNTS } }),
+  row("online", "whosOnline", "onlineList", "text", "", "Users who count", "User names, separated by commas, for \"Only the users listed\".", { advanced: true }),
+  row("online", "whosOnline", "onlinePosition", "choice", "top-left", "Panel position", "Where the panel starts on Hub scenes (top left sits right of the scene navigation). Each user can drag it elsewhere.", { advanced: true, choices: { ...POSITIONS } }),
+  row("online", "whosOnline", "onlineDrag", "bool", true, "The panel can be moved", "Everyone can drag the panel by its title to a spot of their own (kept for that browser, always on screen); double-click the title to put it back.", { advanced: true }),
+  row("online", "whosOnline", "onlineLegacyHooks", "bool", true, "Also fire the old hook names", "Besides red-book.allPlayersOnline and red-book.playerCountChanged, fire wayfarers-toolkit.allPlayersOnline and wayfarers-toolkit.playerCountChanged for world scripts written for the companion toolkit (skipped while the toolkit still provides its own Who's online).", { advanced: true }),
   row("data", null, "debugLog", "bool", false, "Debug logging", "Write Red Book's automatic decisions (leader changes, skipped duplicates) to the browser console.", { advanced: true }),
-  // Hidden record settings (written by the module).
+  // Hidden record settings (written by the module). boardPins is only read for the one-time move into the GM-only store (0.3.0)
+  // and is kept registered so that move can read it; the key never changes.
   { key: "openSession", type: "text", default: "", hidden: true },
+  { key: "migrations", type: "object", default: { v: 1 }, hidden: true },
+  { key: "onlineHudPos", type: "object", default: {}, hidden: true, client: true },
   { key: "boardPins", type: "object", default: { v: 1, pins: [] }, hidden: true }
-];
+], { reserved: FEATURE_KEYS });
 
 /** Hidden record settings: never shown and never reset by "Reset tab". */
-export const RECORDS = SETTINGS.filter(s => s.hidden).map(s => s.key);
+export const RECORDS = records(SETTINGS);
 
-/** Settings of a tab, split into { basic, advanced }. */
-export function tabRows(tab) {
-  const list = SETTINGS.filter(s => s.tab === tab && !s.hidden);
-  return { basic: list.filter(s => !s.advanced), advanced: list.filter(s => s.advanced) };
-}
+/** Settings of a tab, split into { basic, advanced } (rows of a turned-off tool are shown greyed out, so all are listed). */
+export const tabRows = tab => coreTabRows(SETTINGS, tab);
 
 /** A form value converted to the setting's type, clamped; null when it can't be read (the old value is kept). */
-export function convert(s, raw) {
-  if (s.type === "bool") return raw === true || raw === "on" || raw === "true";
-  if (s.type === "number") {
-    const n = Number(raw); if (!Number.isFinite(n)) return null;
-    return Math.min(s.max ?? Infinity, Math.max(s.min ?? -Infinity, n));
-  }
-  if (s.type === "text") return String(raw ?? "").trim() || String(s.default);
-  return null;
-}
+export const convert = (s, raw) => coreConvert(s, raw);
 
 /** Log groups turned off, from a settings getter. */
 export const offGroups = get => Object.keys(GROUPS).filter(g => get(`log-${g}`) === false);

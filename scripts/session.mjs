@@ -7,11 +7,10 @@
  */
 import { ID, HOOKS, TOOLKIT_ID, esc } from "./const.mjs";
 import * as M from "./session-model.mjs";
-import * as L from "./leader.mjs";
-import { get, set } from "./settings.mjs";
+import { L, get, set, log, warn } from "./core.mjs";
 import { offGroups } from "./settings-model.mjs";
-import { log, warn } from "./log.mjs";
 import * as UI from "./ui.mjs";
+import { gateApi } from "./check-model.mjs";
 
 const TK = TOOLKIT_ID;
 const hasProp = (o, p) => foundry.utils.hasProperty(o, p);
@@ -45,7 +44,9 @@ export function record(type, text, { refs = [], data = {}, private: priv = false
   const ev = M.makeEvent({ type, text, refs, data, private: priv, thread, rtText: rtText(), wtText: wtText(), wt: game.time.worldTime });
   R.data = M.addEvent(R.data, ev);
   schedule();
-  L.broadcastHook(HOOKS.eventLogged, { session: R.entry.id, event: ev });
+  // Every client hears this hook (players too), so it carries ids only: never the text, which may be a GM-only note. GM clients
+  // read the event from the GM-only journal (api.session.get) when they need it.
+  L.broadcastHook(HOOKS.eventLogged, M.eventHookPayload(R.entry.id, ev));
   return ev;
 }
 
@@ -185,7 +186,8 @@ async function doEnd(by) {
   const entry = R.entry;
   await set("openSession", "");
   unload();
-  L.broadcastHook(HOOKS.sessionEnded, { session: entry.id, uuid: entry.uuid, name: ended.name, summary: ended.summary });
+  // Ids only (the summary holds GM-only threads): GM clients read it with api.session.get(session).summary.
+  L.broadcastHook(HOOKS.sessionEnded, { session: entry.id, uuid: entry.uuid, name: ended.name });
   return entry;
 }
 
@@ -211,7 +213,7 @@ export function note(text, opts = {}) {
   if (!UI.gmOnly()) return false;
   const n = M.parseNote(text, opts); if (!n.text) return false;
   if (!openEntry() && !R.data?.open) { ui.notifications.warn("Red Book: start a session first (no session is open)."); return false; }
-  return L.request("note", n);
+  return L.request("note", { text: n.text.slice(0, 2000), thread: n.thread, private: n.private });
 }
 export async function noteDialog() {
   if (!UI.gmOnly()) return;
@@ -247,7 +249,7 @@ export async function shareRecap(ref) {
     recap = await JournalEntry.create({ name, folder: folder?.id, ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER }, flags: { [ID]: { recap: { session: entry.id, v: 1 } } }, pages: [{ name: "Recap", type: "text", text: { content } }] });
   }
   ui.notifications.info(`Red Book: ${name} shared with players.`);
-  L.broadcastHook(HOOKS.recapShared, { session: entry.id, recap: recap.id, uuid: recap.uuid });
+  Hooks.callAll(HOOKS.recapShared, { session: entry.id, recap: recap.id, uuid: recap.uuid });
   return recap;
 }
 
@@ -336,7 +338,7 @@ function wrapShow() {
   const orig = J.show;
   const wrapped = async function (doc, options = {}, ...rest) {
     const r = await orig.call(this, doc, options, ...rest);
-    try { if (doc?.uuid) L.request("journal", { uuid: doc.uuid, force: !!options.force, users: Array.isArray(options.users) ? options.users.length : 0 }); } catch { }
+    try { if (doc?.uuid) L.request("journal", { uuid: doc.uuid, force: !!options?.force, users: Array.isArray(options?.users) ? options.users.length : 0 }); } catch { }
     return r;
   };
   wrapped.__redBook = true; J.show = wrapped;
@@ -353,21 +355,27 @@ export function registerKeybinding() {
 
 /** Ready hook (feature on). */
 export function ready() {
-  L.handle("start", (d, user) => user.isGM && doStart(user));
-  L.handle("end", (d, user) => user.isGM && doEnd(user));
+  // Requests arrive schema-checked and rate-limited by wanderers-core, with Foundry's sender user (unknown senders are refused
+  // before this). start/end/note/log are `from: "gm"` kinds; the isGM checks below stay as a second line.
+  L.handle("start", (d, user) => user?.isGM && doStart(user));
+  L.handle("end", (d, user) => user?.isGM && doEnd(user));
   L.handle("note", (d, user) => {
-    if (!user.isGM) return;
+    if (!user?.isGM) return;
     const n = M.parseNote(d.text, d); if (!n.text) return;
     if (!R.data?.open) { const j = openEntry(); if (j) load(j); }
     record("note", n.text, { thread: n.thread, private: n.private, data: { by: user.name } });
   });
-  L.handle("log", (d, user) => { if (user.isGM) record(String(d.type), String(d.text ?? ""), { refs: Array.isArray(d.opts?.refs) ? d.opts.refs : [], private: !!d.opts?.private }); });
+  L.handle("log", (d, user) => { if (user?.isGM) record(String(d.type), String(d.text ?? ""), { refs: d.refs ?? [], private: !!d.private }); });
   L.handle("rest", (d, user) => {
-    const a = fromUuidSync(d.uuid); if (!a?.testUserPermission?.(user, "OWNER")) return;
+    if (!user) return;
+    let a = null; try { a = fromUuidSync(d.uuid, { strict: false }); } catch { }
+    if (!(a instanceof Actor) || !a.testUserPermission?.(user, "OWNER")) return;
     record("rest", `${a.name} finished a ${d.long ? "long" : "short"} rest.`, { refs: [a.uuid] });
   });
   L.handle("journal", async (d, user) => {
+    if (!user) return;
     let doc = null; try { doc = await fromUuid(d.uuid); } catch { }
+    if (doc?.documentName !== "JournalEntry" && doc?.documentName !== "JournalEntryPage") return;
     if (!doc || !doc.testUserPermission?.(user, "OWNER")) return;
     const name = doc.documentName === "JournalEntryPage" ? `${doc.parent?.name}: ${doc.name}` : doc.name;
     if (isSessionEntry(doc.documentName === "JournalEntryPage" ? doc.parent : doc)) return;
@@ -420,11 +428,17 @@ export function headerControls(app, controls) {
   controls.push({ icon: "fa-solid fa-share-from-square", label: "Share as recap", action: "rbRecap", visible: true });
 }
 
-export const api = {
+const apiRaw = {
   start, end, note, noteDialog, shareRecap, flush,
   current: () => { const j = openEntry(); return j ? { id: j.id, uuid: j.uuid, ...dataOf(j) } : null; },
   list: () => sessions().map(j => ({ id: j.id, uuid: j.uuid, name: j.name, n: dataOf(j).n, open: dataOf(j).open })),
   get: ref => { const j = typeof ref === "string" ? game.journal.get(ref) : ref; return j && isSessionEntry(j) ? dataOf(j) : null; },
   /** Adds an event from another module: routed to the leader. type: one of the session-model TYPES (unknown = note). */
-  log: (type, text, opts = {}) => L.request("log", { type, text, opts })
+  log: (type, text, opts = {}) => {
+    const refs = Array.isArray(opts.refs) ? opts.refs.filter(r => typeof r === "string").slice(0, 20) : [];
+    return L.request("log", { type: String(type ?? "note"), text: String(text ?? "").slice(0, 2000), refs, private: !!opts.private });
+  }
 };
+
+/** The session log is GM only: for other users every member warns "GM only" and returns undefined (the logs are GM-only journals). */
+export const api = gateApi(apiRaw, () => !!game.user?.isGM, () => ui.notifications.warn("Red Book: GM only."));

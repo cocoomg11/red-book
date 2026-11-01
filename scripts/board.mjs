@@ -1,16 +1,37 @@
 /**
  * Next-session board (feature "prepBoard"): one GM window. Active quests with their next objectives (from the companion toolkit when
  * it is active, else none), the NPCs, journals and scenes those quests link to, the open threads and summary of the latest session,
- * and a Pinned list the GM drops documents onto (world setting, capped, versioned). Read-only apart from the pins.
+ * and a Pinned list the GM drops documents onto (capped, versioned). The pins live in the GM-only store journal (store.mjs), not in
+ * a world setting, so players never receive them. Read-only apart from the pins.
  */
 import { ID, TOOLKIT_ID, esc } from "./const.mjs";
 import * as B from "./board-model.mjs";
+import { gateApi } from "./check-model.mjs";
 import { openThreads, TYPES } from "./session-model.mjs";
-import { get, set } from "./settings.mjs";
+import { F, get, set } from "./core.mjs";
 import * as UI from "./ui.mjs";
-import * as F from "./features.mjs";
+import * as Store from "./store.mjs";
+import { migratePins } from "./store-model.mjs";
 
 let APP = null;
+
+/** The pins (GM). Before the one-time move has run, the old setting's pins are shown merged in, so nothing seems lost. */
+export function pinStore() {
+  const s = Store.read();
+  return s.migrated.boardPins ? s.pins : (migratePins(s, get("boardPins")).store?.pins ?? s.pins);
+}
+async function savePins(pins) {
+  const s = Store.read();
+  const m = s.migrated.boardPins ? s : (migratePins(s, get("boardPins")).store ?? s);
+  await Store.write({ ...m, pins });
+  if (!s.migrated.boardPins && B.normalizePins(get("boardPins")).pins.length) await set("boardPins", { v: 1, pins: [] });
+}
+/** For the health check. */
+export function store() {
+  const j = Store.entry(); if (!j) return { ok: true, text: "Board pins: none yet (the GM-only store journal is made with the first pin)." };
+  const open = Number(j.ownership?.default ?? 0) > 0 || Object.entries(j.ownership ?? {}).some(([u, l]) => u !== "default" && Number(l) > 0 && !game.users.get(u)?.isGM);
+  return open ? { ok: false, text: `The "${j.name}" journal is visible to players: set its ownership back to None.` } : { ok: true, text: `Board pins: ${pinStore().pins.length}, kept in a GM-only journal.` };
+}
 let deps = { session: null, check: null };
 export function init(d) { deps = { ...deps, ...d }; }
 
@@ -31,7 +52,7 @@ export function model() {
   const S = F.on("sessionLog") ? deps.session : null;
   const last = S?.latest?.() ?? null;
   const data = last ? S.dataOf(last) : null;
-  return { quests, links, last: last ? { id: last.id, uuid: last.uuid, name: last.name, open: data.open, summary: data.summary, threads: openThreads(data) } : null, pins: B.normalizePins(get("boardPins")).pins, toolkit: !!game.modules.get(TOOLKIT_ID)?.active };
+  return { quests, links, last: last ? { id: last.id, uuid: last.uuid, name: last.name, open: data.open, summary: data.summary, threads: openThreads(data) } : null, pins: pinStore().pins, toolkit: !!game.modules.get(TOOLKIT_ID)?.active };
 }
 
 const nameOf = (uuid, fallback = "") => UI.safeSync(uuid)?.name ?? fallback ?? uuid;
@@ -74,7 +95,7 @@ export class Board extends foundry.applications.api.ApplicationV2 {
       if (b.dataset.action === "view") return UI.safeSync(u)?.view?.();
       if (b.dataset.action === "check") return deps.check?.run?.({ scenes: [u] });
       if (b.dataset.action === "checkAll") return deps.check?.run?.({ scenes: model().links.scenes.map(e => e.uuid) });
-      if (b.dataset.action === "unpin") { await set("boardPins", B.removePin(get("boardPins"), u)); this.render(); }
+      if (b.dataset.action === "unpin") { await savePins(B.removePin(pinStore(), u)); this.render(); }
     }));
     const drop = content.querySelector("[data-drop]");
     if (drop) {
@@ -85,9 +106,9 @@ export class Board extends foundry.applications.api.ApplicationV2 {
         let d = null; try { d = UI.TextEditorImpl().getDragEventData(ev); } catch { }
         const uuid = d?.uuid; if (!uuid) return;
         const doc = UI.safeSync(uuid);
-        const r = B.addPin(get("boardPins"), { uuid, type: d.type ?? doc?.documentName, name: doc?.name ?? "" });
+        const r = B.addPin(pinStore(), { uuid, type: d.type ?? doc?.documentName, name: doc?.name ?? "" });
         if (!r.added) return ui.notifications.warn(`Red Book: ${r.why}.`);
-        await set("boardPins", { v: r.v, pins: r.pins });
+        await savePins({ v: r.v, pins: r.pins });
         this.render();
       });
     }
@@ -110,9 +131,11 @@ export function ready() {
   Hooks.on("updateJournalEntry", j); Hooks.on("createJournalEntry", j); Hooks.on("deleteJournalEntry", () => APP?.rendered && refresh());
   for (const h of ["deleteActor", "deleteScene", "updateScene", "updateActor"]) Hooks.on(h, (doc, changes) => { if (APP?.rendered && (h.startsWith("delete") || (changes && "name" in changes))) refresh(); });
   Hooks.on(`${ID}.sessionEnded`, refresh); Hooks.on(`${ID}.sessionStarted`, refresh);
-  Hooks.on("updateSetting", s => { if (s.key === `${ID}.boardPins`) refresh(); });
+  Hooks.on("updateJournalEntry", doc => { if (APP?.rendered && doc.flags?.[ID]?.store) refresh(); });
 }
 
-export const api = { open, model, refresh, pins: () => B.normalizePins(get("boardPins")).pins,
-  pin: async uuid => { const d = UI.safeSync(uuid); const r = B.addPin(get("boardPins"), { uuid, type: d?.documentName, name: d?.name }); if (r.added) await set("boardPins", { v: r.v, pins: r.pins }); return r.added; },
-  unpin: async uuid => set("boardPins", B.removePin(get("boardPins"), uuid)) };
+const apiRaw = { open, model, refresh, pins: () => pinStore().pins,
+  pin: async uuid => { const d = UI.safeSync(uuid); const r = B.addPin(pinStore(), { uuid, type: d?.documentName, name: d?.name }); if (r.added) await savePins({ v: r.v, pins: r.pins }); return r.added; },
+  unpin: async uuid => savePins(B.removePin(pinStore(), uuid)) };
+/** The board is GM only: for other users every member warns "GM only" and returns undefined. */
+export const api = gateApi(apiRaw, () => !!game.user?.isGM, () => ui.notifications.warn("Red Book: GM only."));

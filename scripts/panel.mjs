@@ -4,10 +4,9 @@
  * where comes from settings-model.mjs.
  */
 import { ID, esc } from "./const.mjs";
-import * as F from "./features.mjs";
+import { F, get, set } from "./core.mjs";
 import * as S from "./settings-model.mjs";
-import { get, set } from "./settings.mjs";
-import { health } from "./health.mjs";
+import { lines as health } from "./health.mjs";
 import * as UI from "./ui.mjs";
 
 let deps = {};
@@ -18,6 +17,7 @@ const ICON = { ok: "fa-circle-check", warn: "fa-triangle-exclamation", bad: "fa-
 function input(s, disabled) {
   const v = get(s.key); const dis = disabled ? "disabled" : "";
   if (s.type === "bool") return `<input type="checkbox" name="${s.key}" ${v ? "checked" : ""} ${dis}>`;
+  if (s.type === "choice") return `<select name="${s.key}" ${dis}>${Object.entries(s.choices ?? {}).map(([k, l]) => `<option value="${esc(k)}" ${k === v ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>`;
   if (s.type === "number") return `<input type="number" name="${s.key}" value="${esc(v)}" min="${s.min ?? ""}" max="${s.max ?? ""}" step="${s.step ?? 1}" ${dis}>`;
   return `<input type="text" name="${s.key}" value="${esc(v)}" ${dis}>`;
 }
@@ -28,6 +28,7 @@ export class ControlPanel extends foundry.applications.api.ApplicationV2 {
   tab = "overview";
   async _renderHTML() {
     const div = document.createElement("div"); div.className = "rb-panel-body";
+    if (!game.user?.isGM) { div.textContent = "GM only."; return div; }
     const tabs = S.TABS.map(t => `<button type="button" data-tab="${t.id}" class="${t.id === this.tab ? "active" : ""}"><i class="${t.icon}"></i> ${esc(t.label)}</button>`).join("");
     div.innerHTML = `<nav class="rb-tabs">${tabs}</nav><section class="rb-main">${this.#tab()}</section>`;
     return div;
@@ -39,6 +40,8 @@ export class ControlPanel extends foundry.applications.api.ApplicationV2 {
       const btn = (a, icon, label, on = true) => on ? `<button type="button" data-run="${a}"><i class="${icon}"></i> ${label}</button>` : "";
       return `<h2>Overview</h2><ul class="rb-health">${health(deps).map(l => `<li class="rb-${l.level}"><i class="fa-solid ${ICON[l.level]}"></i> ${esc(l.text)}</li>`).join("")}</ul>
         <div class="rb-buttons">
+          ${btn("sessionStart", "fa-solid fa-flag-checkered", "Session Start…", F.on("sessionStart"))}
+          ${btn("online", "fa-solid fa-users", "Who's online", F.on("whosOnline"))}
           ${btn(open ? "end" : "start", open ? "fa-solid fa-book-bookmark" : "fa-solid fa-book", open ? "End session" : "Start session", F.on("sessionLog"))}
           ${btn("note", "fa-solid fa-pen", "Quick note", F.on("sessionLog") && !!open)}
           ${btn("recap", "fa-solid fa-share-from-square", "Share last session as recap", F.on("sessionLog"))}
@@ -64,7 +67,8 @@ export class ControlPanel extends foundry.applications.api.ApplicationV2 {
     content.querySelectorAll("[data-tab]").forEach(b => b.addEventListener("click", () => { this.tab = b.dataset.tab; this.render(); }));
     content.querySelectorAll("[data-run]").forEach(b => b.addEventListener("click", async () => {
       const r = b.dataset.run;
-      if (r === "start") deps.session?.start(); else if (r === "end") await deps.session?.end();
+      if (r === "sessionStart") deps.start?.open(); else if (r === "online") deps.online?.open();
+      else if (r === "start") deps.session?.start(); else if (r === "end") await deps.session?.end();
       else if (r === "note") deps.session?.noteDialog(); else if (r === "recap") deps.session?.shareRecap();
       else if (r === "board") deps.board?.open(); else if (r === "check") deps.check?.chooser(); else if (r === "cleanup") deps.cleanup?.open();
       else if (r === "clearIgnored") await deps.check?.clearAllIgnored?.();
@@ -91,7 +95,9 @@ export class ControlPanel extends foundry.applications.api.ApplicationV2 {
   }
 }
 
+/** GM only (players get a "GM only" notice and nothing opens). */
 export function open(tab) {
+  if (!UI.gmOnly()) return undefined;
   const app = foundry.applications.instances?.get?.(`${ID}-panel`) ?? new ControlPanel();
   if (tab) app.tab = tab;
   return app.render({ force: true });

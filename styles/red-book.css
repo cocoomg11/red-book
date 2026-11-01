@@ -43,3 +43,22 @@
 .rb-findings li.rb-ignored { opacity: 0.7; } .rb-clear-ignored { margin: 4px 0; } .rb-clear-ignored button { width: auto; }
 .rb-problem .rb-sev { color: var(--rb-bad); } .rb-warning .rb-sev { color: var(--rb-warn); } .rb-note .rb-sev { color: var(--rb-muted); }
 .rb-review { max-height: 340px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+
+/* Who's online panel (Hub scenes) and window. Placed with inline left/top by online.mjs; movable by its title. */
+.rb-online-hud {
+  position: fixed; z-index: 40; top: 12px; left: 320px; min-width: 170px; max-width: 240px; padding: 6px 10px 8px;
+  background: rgba(15, 12, 8, 0.82); border: 1px solid rgba(201, 162, 39, 0.55); border-radius: 6px; color: #e8dcc0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6); font-size: 0.9em;
+}
+.rb-online-hud.movable h3 { cursor: grab; touch-action: none; user-select: none; }
+.rb-online-hud.dragging { opacity: 0.85; } .rb-online-hud.dragging h3 { cursor: grabbing; }
+.rb-online-hud.all { border-color: #4caf50; box-shadow: 0 0 10px rgba(76, 175, 80, 0.55); }
+.rb-online-hud h3 { margin: 0 0 3px; border: none; color: #f0c850; font-size: 1.1em; }
+.rb-online-list { list-style: none; margin: 4px 0 0; padding: 0; }
+.rb-online-list li { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
+.rb-online-list li img { width: 26px; height: 26px; border-radius: 50%; border: 1px solid rgba(201, 162, 39, 0.7); object-fit: cover; }
+.rb-online-list li .dot { width: 14px; height: 14px; border-radius: 50%; margin: 0 6px; border: 1px solid #000; }
+.rb-online-list li.off { opacity: 0.45; filter: grayscale(1); }
+.rb-online-list li.extra { font-style: italic; } .rb-online-list li small { opacity: 0.75; }
+.rb-online-all { margin: 0; color: #7fdc82; font-weight: bold; } .rb-online-count { margin: 0; opacity: 0.85; }
+.rb-online-board { padding: 8px; }

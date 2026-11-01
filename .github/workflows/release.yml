@@ -34,6 +34,9 @@ jobs:
           npm run check
           npm test
 
+      - name: Vendored wanderers-core matches its pin
+        run: node vendor/wanderers-core/vendor.mjs verify --remote
+
       - name: Set version and URLs in module.json
         if: github.event_name == 'release'
         run: |
@@ -49,7 +52,8 @@ jobs:
 
       - name: Build module.zip
         run: |
-          zip -r module.zip module.json scripts styles lang README.md CHANGELOG.md LICENSE
+          zip -r module.zip module.json scripts styles lang vendor README.md CHANGELOG.md LICENSE \
+            -x 'vendor/wanderers-core/config/*' 'vendor/wanderers-core/vendor.mjs'
           unzip -l module.zip
 
       - name: Upload release assets

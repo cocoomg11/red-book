@@ -283,7 +283,7 @@ export function stripSecrets(html = "") {
   const open = /<section\b[^>]*class\s*=\s*["'][^"']*\bsecret\b[^"']*["'][^>]*>/i;
   for (let guard = 0; guard < 500; guard++) {
     const m = open.exec(s); if (!m) break;
-    let depth = 1, i = m.index + m[0].length; const tag = /<\/?section\b[^>]*>/gi; tag.lastIndex = i;
+    let depth = 1; const i = m.index + m[0].length; const tag = /<\/?section\b[^>]*>/gi; tag.lastIndex = i;
     let t; let end = s.length;
     while ((t = tag.exec(s))) { depth += t[0][1] === "/" ? -1 : 1; if (depth === 0) { end = t.index + t[0].length; break; } }
     s = s.slice(0, m.index) + s.slice(end);
@@ -374,4 +374,14 @@ export async function startPrompt({ ask, subscribe, close = () => { }, isOpen = 
     if (!ok || started || isOpen()) return false;
     start(); return true;
   } finally { try { off(); } catch { } }
+}
+
+/**
+ * The `red-book.eventLogged` hook payload: ids only, so a player client that hears it learns nothing from the GM-only log (no text,
+ * no linked documents, not whether it was a private note). `{ session, event: { id, type, t, wt } }`; a GM client reads the full
+ * event from the journal (api.session.get(session).events).
+ */
+export function eventHookPayload(session, ev) {
+  const type = ev?.type === "note" ? "note" : String(ev?.type ?? "note");
+  return { session: String(session ?? ""), event: { id: String(ev?.id ?? ""), type, t: Number(ev?.t) || 0, wt: Number(ev?.wt) || 0 } };
 }
