@@ -11,7 +11,7 @@ import * as S from "./settings-model.mjs";
 import { report } from "./health.mjs";
 import * as V from "./view.mjs";
 import { t } from "./i18n.mjs";
-import { PINS_MAX } from "./board-model.mjs";
+import { PINS_MAX, TODOS_MAX, isFailure } from "./board-model.mjs";
 import * as UI from "./ui.mjs";
 
 /** @type {any} */
@@ -60,12 +60,13 @@ export class RedBookApp extends foundry.applications.api.ApplicationV2 {
   #page() {
     const p = this.page;
     if (p === "session") return this.#sessionPage();
-    if (p === "board") return F.on("prepBoard") ? V.boardPageHTML(deps.board.model(), look, { sessionOn: F.on("sessionLog"), checkOn: F.on("sceneCheck"), pinsMax: PINS_MAX }) : V.pageHead(t("Nav.board")) + V.offAlert();
+    if (p === "board") return F.on("prepBoard") ? V.boardPageHTML(deps.board.model(), look, { sessionOn: F.on("sessionLog"), checkOn: F.on("sceneCheck"), pinsMax: PINS_MAX, prepOn: F.on("prepList"), todosMax: TODOS_MAX }) : V.pageHead(t("Nav.board")) + V.offAlert();
     if (p === "check") {
       if (!F.on("sceneCheck")) return V.pageHead(t("Nav.check")) + V.offAlert();
       const scenes = game.scenes.contents.map(s => ({ id: s.id, name: s.name })).sort((a, b) => a.name.localeCompare(b.name));
       if (!this.check.selected && canvas?.scene) this.check.selected = canvas.scene.id;
-      return V.checkPageHTML({ scenes, results: deps.check.memory().all(), selected: this.check.selected, query: this.check.query });
+      const prep = F.on("prepList") ? { on: true, onBoard: new Set((deps.board?.todos?.() ?? []).map(i => i.id)) } : undefined;
+      return V.checkPageHTML({ scenes, results: deps.check.memory().all(), selected: this.check.selected, query: this.check.query, prep });
     }
     if (p === "online") {
       if (!F.on("whosOnline")) return V.pageHead(t("Nav.online")) + V.offAlert();
@@ -159,6 +160,12 @@ export class RedBookApp extends foundry.applications.api.ApplicationV2 {
       case "clearIgnored": return C?.ignoreAndRefresh(C.clearIgnored(d.scene));
       case "clearAllIgnored": return C?.clearAllIgnored?.();
       case "unpin": await B.unpin(d.uuid); this.render(); return;
+      case "prepAdd": case "prepAddAll": {
+        const r = C?.memory().get(d.scene); if (!r || r.pending || !F.on("prepList")) return undefined;
+        const list = a === "prepAddAll" ? (r.findings ?? []) : [r.findings?.[Number(d.i)]];
+        return B?.addTodos(r.scene, list.filter(isFailure));
+      }
+      case "prepDone": return B?.doneTodo(d.id);
       case "openOnline": return deps.online?.open();
       case "resetHud": return deps.online?.resetPosition();
       case "cleanup": return deps.cleanup?.open();

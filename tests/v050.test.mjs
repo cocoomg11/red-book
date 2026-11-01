@@ -1,10 +1,24 @@
-import { test } from "node:test";
+import { test, before } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { flatten } from "../scripts/i18n.mjs";
+import * as V from "../scripts/view.mjs";
+import * as B from "../scripts/board-model.mjs";
+import * as C from "../scripts/check-model.mjs";
+import * as St from "../scripts/store-model.mjs";
 import * as M from "../scripts/session-model.mjs";
 import { REQUESTS } from "../scripts/requests.mjs";
 import { readRequest, makeRequestId } from "../vendor/wanderers-core/index.mjs";
 
 const QID = "abcdefghijklmnop";
+const LANG = flatten(JSON.parse(readFileSync(new URL("../lang/en.json", import.meta.url), "utf8")));
+before(() => {
+  globalThis.game = { i18n: {
+    localize: k => LANG[k] ?? `MISSING:${k}`,
+    format: (k, d) => (LANG[k] ?? `MISSING:${k}`).replace(/\{(\w+)\}/g, (_, n) => d[n] ?? "")
+  } };
+});
+const noMissing = html => assert.ok(!html.includes("MISSING:"), html.match(/MISSING:[\w.]+/)?.[0]);
 
 // ---------------------------------------------------------------- quest events
 test("quest hook: ids only, known changes, journal ids or UUIDs; anything else is null", () => {
@@ -139,4 +153,68 @@ test("requests: journey relay is GM only, schema-checked, no user field", () => 
   assert.equal(bad.ok, false);
   const user = readRequest(REQUESTS, { action: "request", kind: "journey", rid: rid(3), data: { kind: "hex", user: "x" } });
   assert.equal(user.ok, false);
+});
+
+// ---------------------------------------------------------------- timeline: Travel chip
+test("timeline filter: Travel has its own chip; quests chip has quests and objectives", () => {
+  assert.deepEqual(V.FILTERS.travel, ["travel"]);
+  assert.deepEqual(V.FILTERS.quests, ["quest", "objective"]);
+  const ev = [{ type: "travel" }, { type: "quest" }, { type: "objective" }];
+  assert.equal(V.filterEvents(ev, "travel").length, 1);
+  assert.equal(V.filterCounts(ev).quests, 2);
+  noMissing(V.sessionPageHTML({ on: true, now: 10, filter: "travel", session: { name: "S", startedAt: 1, events: [] }, roster: [] }));
+});
+
+// ---------------------------------------------------------------- prep list
+const scene = { id: "s1", uuid: "Scene.s1", name: "Cave" };
+const F1 = { rule: "walls", severity: "warning", text: "No walls", key: "walls" };
+const F2 = { rule: "bg", severity: "problem", text: "Background missing", key: "background:x" };
+const F3 = { rule: "n", severity: "note", text: "A note", key: "notes:n" };
+test("prep list: deduped by scene + finding key, newest first, capped, linked to the scene", () => {
+  let r = B.addTodos([], scene, [F1, F2], 100);
+  assert.equal(r.added, 2); assert.deepEqual(r.items.map(i => i.text), ["Background missing", "No walls"]);
+  assert.equal(r.items[0].sceneUuid, "Scene.s1"); assert.equal(r.items[0].id, "s1|background:x");
+  r = B.addTodos(r.items, scene, [F1], 200);
+  assert.equal(r.added, 0); assert.equal(r.items.length, 2, "same finding twice stays one item");
+  r = B.addTodos(r.items, { id: "s2", name: "Hall" }, [F1], 300);
+  assert.equal(r.added, 1); assert.equal(r.items[0].sceneUuid, "Scene.s2");
+  assert.equal(B.removeTodo(r.items, "s1|walls").length, 2);
+  const many = Array.from({ length: 150 }, (_, i) => ({ severity: "warning", text: `t${i}`, key: `k${i}` }));
+  assert.equal(B.addTodos([], scene, many).items.length, B.TODOS_MAX);
+  assert.equal(B.normalizeTodos([{ id: "a" }, { id: "a" }, null, { nope: 1 }]).length, 1);
+  assert.equal(B.isFailure(F3), false); assert.equal(B.isFailure(F1), true);
+  // A finding without a key (a failed check line) is keyed by its text.
+  assert.equal(B.todoId("s1", { text: "Couldn't check" }), "s1|Couldn't check");
+});
+test("store: prep list kept in the GM-only store (older stores read as empty)", () => {
+  assert.deepEqual(St.normalizeStore({ v: 1, pins: { pins: [] } }).todos, []);
+  assert.equal(St.normalizeStore({ v: 1, todos: [{ id: "s1|walls", sceneId: "s1", text: "x" }] }).todos.length, 1);
+});
+test("check page: Add to board on failures only, On the board marker, Add all failures (only the new ones)", () => {
+  const r = C.applyIgnored({ scene, all: [F1, F2, F3] }, null);
+  const html = V.checkPageHTML({ scenes: [{ id: "s1", name: "Cave" }], results: { s1: r }, selected: "s1", query: "", prep: { on: true, onBoard: new Set(["s1|walls"]) } });
+  noMissing(html);
+  const adds = html.match(/data-action="prepAdd"/g) ?? [];
+  assert.equal(adds.length, 1, "one failure not yet on the board");
+  assert.match(html, /class="rb-on-board"/);
+  assert.match(html, /data-action="prepAddAll" data-scene="s1">[^<]*<i[^>]*><\/i> Add all failures \(1\)/);
+  const off = V.checkPageHTML({ scenes: [{ id: "s1", name: "Cave" }], results: { s1: r }, selected: "s1", query: "" });
+  assert.ok(!off.includes("prepAdd"), "no buttons when the prep list is off");
+  const all = V.checkPageHTML({ scenes: [{ id: "s1", name: "Cave" }], results: { s1: r }, selected: "s1", query: "", prep: { on: true, onBoard: new Set(["s1|walls", "s1|background:x"]) } });
+  assert.match(all, /data-action="prepAddAll"[^>]* disabled/); assert.match(all, /Every failure is on the board/);
+});
+test("board: prep panel grouped by scene, scene link and Check again, Done buttons, escaped", () => {
+  const items = B.addTodos([], scene, [F1, { ...F2, text: "<b>bad</b>" }]).items;
+  const html = V.prepPanelHTML(items, { checkOn: true, max: 100 });
+  noMissing(html);
+  assert.equal((html.match(/rb-prep-scene/g) ?? []).length, 1);
+  assert.match(html, /data-action="openUuid" data-uuid="Scene.s1">Cave/);
+  assert.match(html, /data-action="checkScene"[^>]*data-scene="s1"/);
+  assert.equal((html.match(/data-action="prepDone"/g) ?? []).length, 2);
+  assert.ok(html.includes("&lt;b&gt;bad") && !html.includes("<b>bad"));
+  assert.match(V.prepPanelHTML([]), /Nothing to fix/);
+  const m = { toolkit: false, quests: [], links: { actors: [], journals: [], other: [], scenes: [] }, last: null, pins: [], todos: items };
+  assert.match(V.boardPageHTML(m, u => ({ name: u, exists: true, scene: true }), { prepOn: true, checkOn: false }), /Prep list/);
+  assert.ok(!V.boardPageHTML(m, u => ({ name: u, exists: true, scene: true }), { prepOn: false }).includes("Prep list"));
+  assert.ok(!V.prepPanelHTML(items, { checkOn: false }).includes("checkScene"));
 });

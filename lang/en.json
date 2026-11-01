@@ -183,6 +183,15 @@
     },
     "Window": {
       "title": "Red Book"
+    },
+    "Prep": {
+      "title": "Prep list",
+      "add": "Add to the next-session board",
+      "addAll": "Add all failures ({n})",
+      "allOnBoard": "Every failure is on the board.",
+      "onBoard": "On the next-session board",
+      "done": "Done (take off the list)",
+      "none": "Nothing to fix. Send failed findings here from the Scene check page."
     }
   }
 }

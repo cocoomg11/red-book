@@ -9,6 +9,7 @@
 import { esc, plural } from "./const.mjs";
 import { navItem, statusLine, statusLines, badge, dot, icon, TONES } from "../vendor/wanderers-core/index.mjs";
 import { TYPES, durationText } from "./session-model.mjs";
+import { isFailure, todoId } from "./board-model.mjs";
 import { groupFindings, tallyText } from "./check-model.mjs";
 import { t } from "./i18n.mjs";
 
@@ -246,8 +247,25 @@ export function boardPageHTML(m, look, opts = {}) {
   return `${pageHead(t("Nav.board"))}<div class="rb-board3">
     <div class="rb-board-col">${panel(t("Board.quests"), "fa-solid fa-scroll", quests)}${panel(t("Board.last"), "fa-solid fa-book", last)}</div>
     <div class="rb-board-col">${panel(t("Board.npcs"), "fa-solid fa-user-group", linked(m.links.actors, t("Board.noNpcs")))}${panel(t("Board.journals"), "fa-solid fa-book-open", linked([...m.links.journals, ...m.links.other], t("Board.noJournals")))}${panel(t("Board.scenes"), "fa-solid fa-map", linked(scenes, t("Board.noScenes")), { head: scenes.length && opts.checkOn ? btn("checkAll", "fa-solid fa-clipboard-check", t("Board.checkAll"), { small: true }) : "" })}</div>
-    <div class="rb-board-col">${panel(t("Board.pinned"), "fa-solid fa-thumbtack", pins, { head: badge("info", `${m.pins.length}/${opts.pinsMax ?? 50}`, { small: true }) })}</div>
+    <div class="rb-board-col">${opts.prepOn ? prepPanelHTML(m.todos ?? [], { checkOn: !!opts.checkOn, max: opts.todosMax }) : ""}${panel(t("Board.pinned"), "fa-solid fa-thumbtack", pins, { head: badge("info", `${m.pins.length}/${opts.pinsMax ?? 50}`, { small: true }) })}</div>
   </div>`;
+}
+
+/**
+ * The board's prep list (0.5.0): scene-check findings sent from the Scene check page, grouped by scene, each scene a link with
+ * Check again; each item has a Done button. `items`: board-model normalizeTodos().
+ * @param {any[]} items
+ * @param {{ checkOn?: boolean, max?: number }} [opts]
+ */
+export function prepPanelHTML(items = [], { checkOn = true, max = 100 } = {}) {
+  /** @type {Map<string, any[]>} */ const by = new Map();
+  for (const i of items) { const l = by.get(i.sceneId) ?? []; l.push(i); by.set(i.sceneId, l); }
+  const body = items.length ? [...by.values()].map(list => {
+    const sc = list[0];
+    const head = `<p class="wc-row rb-prep-scene"><a class="rb-open wc-grow rb-ellipsis" data-action="openUuid" data-uuid="${esc(sc.sceneUuid)}">${esc(sc.sceneName || sc.sceneUuid)}</a>${checkOn ? iconBtn("checkScene", "fa-solid fa-clipboard-check", t("Board.check"), { scene: sc.sceneId }) : ""}</p>`;
+    return `${head}<ul class="wc-lines rb-prep-list">${list.map(i => statusLine(sevTone(i.severity), i.text, { html: `<span class="rb-find-acts">${iconBtn("prepDone", "fa-solid fa-check", t("Prep.done"), { id: i.id })}</span>` })).join("")}</ul>`;
+  }).join("") : `<p class="wc-hint rb-pad">${esc(t("Prep.none"))}</p>`;
+  return panel(t("Prep.title"), "fa-solid fa-list-check", `<div class="wc-panel-body">${body}</div>`, { head: badge(items.length ? "warn" : "ok", `${items.length}/${max}`, { small: true }) });
 }
 
 // ---------------------------------------------------------------- scene check (master–detail)
@@ -265,6 +283,10 @@ export function resultTone(r) {
 /**
  * `m`: { scenes: [{ id, name }], results: { [sceneId]: result | { pending: true } } (the GM client's memory of this load), selected,
  * query }. A result is check.mjs checkOne()'s { scene, findings, ignored, stored, tally }.
+ */
+/**
+ * `m.prep` (0.5.0, prep list on): { on: true, onBoard: Set of prep-list ids already on the board } adds "Add to board" per finding
+ * and "Add all failures".
  */
 export function checkPageHTML(m) {
   const q = String(m.query ?? "").trim().toLowerCase();
@@ -287,15 +309,28 @@ export function checkPageHTML(m) {
     const head = `<div class="wc-row rb-detail-head"><h3 class="wc-grow rb-ellipsis">${esc(sel.name)}</h3>${btn("checkScene", "fa-solid fa-clipboard-check", r && !r.pending ? t("Check.again") : t("Check.run"), { small: true, primary: true, data: { scene: sel.id }, disabled: !!r?.pending })}${r && !r.pending ? btn("exportCheck", "fa-solid fa-file-export", t("Check.export"), { small: true, data: { scene: sel.id } }) : ""}</div>`;
     if (!r) detail = `${head}${hint(t("Check.readOnly"))}`;
     else if (r.pending) detail = `${head}<p class="wc-status wc-pending">${icon("pending")}<span>${esc(t("Check.checking"))}</span></p>`;
-    else detail = `${head}${checkResultHTML(r)}`;
+    else detail = `${head}${checkResultHTML(r, m.prep)}`;
   }
   return `${pageHead(t("Nav.check"), `<span class="wc-hint">${esc(t("Check.memory"))}</span>`)}<div class="rb-md">${list}<div class="rb-detail">${detail}</div></div>`;
 }
 
-/** One scene's findings, grouped by rule category, then the ignored ones and Clear ignored. */
-export function checkResultHTML(r) {
+/**
+ * One scene's findings, grouped by rule category, then the ignored ones and Clear ignored. `prep` (0.5.0): { on, onBoard: Set of
+ * prep-list ids } adds "Add to board" on each failed (problem or warning) finding and "Add all failures".
+ * @param {any} r
+ * @param {{ on?: boolean, onBoard?: Set<string> }} [prep]
+ */
+export function checkResultHTML(r, prep = {}) {
   const sid = r.scene?.id ?? "";
-  const row = (f, i, ignored) => statusLine(sevTone(f.severity), f.text, { html: `<span class="rb-find-acts">${f.fix ? iconBtn("fix", "fa-solid fa-wrench", t("Check.fix"), { scene: sid, i, ignored: ignored ? 1 : 0 }) : ""}${f.key ? (ignored
+  const onBoard = prep?.onBoard ?? new Set();
+  const failures = (r.findings ?? []).filter(isFailure);
+  const toAdd = failures.filter(f => !onBoard.has(todoId(sid, f)));
+  const boardBtn = (f, i, ignored) => {
+    if (!prep?.on || ignored || !isFailure(f)) return "";
+    return onBoard.has(todoId(sid, f)) ? `<span class="rb-on-board" data-tooltip="${esc(t("Prep.onBoard"))}" aria-label="${esc(t("Prep.onBoard"))}"><i class="fa-solid fa-thumbtack" aria-hidden="true"></i></span>`
+      : iconBtn("prepAdd", "fa-solid fa-thumbtack", t("Prep.add"), { scene: sid, i });
+  };
+  const row = (f, i, ignored) => statusLine(sevTone(f.severity), f.text, { html: `<span class="rb-find-acts">${boardBtn(f, i, ignored)}${f.fix ? iconBtn("fix", "fa-solid fa-wrench", t("Check.fix"), { scene: sid, i, ignored: ignored ? 1 : 0 }) : ""}${f.key ? (ignored
     ? iconBtn("unignore", "fa-solid fa-eye", f.ignore?.name ? t("Check.unignoreBy", { name: f.ignore.name }) : t("Check.unignore"), { scene: sid, key: f.key })
     : iconBtn("ignore", "fa-solid fa-eye-slash", t("Check.ignore"), { scene: sid, key: f.key })) : ""}</span>` });
   const total = `<p class="wc-status ${r.tally.problem ? "wc-bad" : r.tally.warning ? "wc-warn" : "wc-ok"}">${icon(r.tally.problem ? "bad" : r.tally.warning ? "warn" : "ok")}<span>${esc(tallyText(r.tally))}${r.ignored?.length ? ` · ${esc(t("Check.ignoredN", { n: r.ignored.length }))}` : ""}</span></p>`;
@@ -303,7 +338,8 @@ export function checkResultHTML(r) {
   const groups = groupFindings(r.findings ?? []).map(g => panel(t(`Check.cat.${g.id}`), g.icon, `<ul class="wc-lines rb-pad">${g.findings.map(f => row(f, index.get(f), false)).join("")}</ul>`, { head: badge(g.findings.some(f => f.severity === "problem") ? "bad" : g.findings.some(f => f.severity === "warning") ? "warn" : "info", String(g.findings.length), { small: true }) })).join("");
   const ign = r.ignored?.length ? `<details class="rb-ignored"><summary>${esc(t("Check.ignoredList", { n: r.ignored.length }))}</summary><ul class="wc-lines rb-pad">${r.ignored.map((f, i) => row(f, i, true)).join("")}</ul></details>` : "";
   const clear = r.stored ? `<div class="wc-row">${btn("clearIgnored", "fa-solid fa-eraser", t("Check.clearIgnored", { n: r.stored }), { small: true, data: { scene: sid } })}</div>` : "";
-  return `${total}${groups || `<p class="wc-status wc-ok">${icon("ok")}<span>${esc(t("Check.nothing"))}</span></p>`}${ign}${clear}`;
+  const addAll = prep?.on && failures.length ? `<div class="wc-row rb-prep-all">${btn("prepAddAll", "fa-solid fa-thumbtack", t("Prep.addAll", { n: toAdd.length }), { small: true, data: { scene: sid }, disabled: !toAdd.length })}${toAdd.length ? "" : `<span class="wc-hint">${esc(t("Prep.allOnBoard"))}</span>`}</div>` : "";
+  return `${total}${addAll}${groups || `<p class="wc-status wc-ok">${icon("ok")}<span>${esc(t("Check.nothing"))}</span></p>`}${ign}${clear}`;
 }
 
 // ---------------------------------------------------------------- who's online

@@ -52,7 +52,7 @@ export function model() {
   const S = F.on("sessionLog") ? deps.session : null;
   const last = S?.latest?.() ?? null;
   const data = last ? S.dataOf(last) : null;
-  return { quests, links, last: last ? { id: last.id, uuid: last.uuid, name: last.name, open: data.open, summary: data.summary, threads: openThreads(data) } : null, pins: pinStore().pins, toolkit: !!game.modules.get(TOOLKIT_ID)?.active };
+  return { quests, links, last: last ? { id: last.id, uuid: last.uuid, name: last.name, open: data.open, summary: data.summary, threads: openThreads(data) } : null, pins: pinStore().pins, toolkit: !!game.modules.get(TOOLKIT_ID)?.active, todos: todos() };
 }
 
 /** Adds the document dropped on the Pinned list (a drop event). Resolves true when a pin was added. */
@@ -67,6 +67,28 @@ export async function dropPin(ev) {
   await savePins({ v: r.v, pins: r.pins });
   return true;
 }
+// ---------------------------------------------------------------- prep list (0.5.0, feature prepList): scene-check findings
+/** The prep list (GM): [{ id, sceneId, sceneUuid, sceneName, text, severity, at }], newest first. */
+export const todos = () => (F.on("prepList") ? Store.read().todos : []);
+async function saveTodos(items) {
+  const s = Store.read();
+  await Store.write({ ...s, todos: B.normalizeTodos(items) });
+}
+/**
+ * Adds scene-check findings of one scene to the prep list (GM). `findings`: [{ key, text, severity }]. A finding already on the list
+ * isn't added again. Resolves to how many were added.
+ */
+export async function addTodos(scene, findings = []) {
+  if (!UI.gmOnly() || !F.on("prepList") || !scene?.id) return 0;
+  const r = B.addTodos(todos(), { id: scene.id, uuid: scene.uuid, name: scene.name }, findings);
+  if (r.added) await saveTodos(r.items);
+  ui.notifications.info(r.added ? `Red Book: ${r.added === 1 ? "1 finding" : `${r.added} findings`} added to the next-session board.` : "Red Book: already on the next-session board.");
+  Panel.refresh();
+  return r.added;
+}
+/** Ticks an item off the prep list (GM). */
+export async function doneTodo(id) { if (!UI.gmOnly()) return; await saveTodos(B.removeTodo(todos(), id)); Panel.refresh(); }
+
 /** Removes a pin (GM). */
 export const unpin = async uuid => savePins(B.removePin(pinStore(), uuid));
 /** The pins list (GM). */
@@ -89,6 +111,8 @@ export function ready() {
 
 const apiRaw = { open, model, refresh, pins,
   pin: async uuid => { const d = UI.safeSync(uuid); const r = B.addPin(pinStore(), { uuid, type: d?.documentName, name: d?.name }); if (r.added) await savePins({ v: r.v, pins: r.pins }); return r.added; },
-  unpin };
+  unpin,
+  /** Experimental (0.5.0): the prep list from the scene check (undefined members when the prep list is off). */
+  todos: () => todos(), doneTodo };
 /** The board is GM only: for other users every member warns "GM only" and returns undefined. */
 export const api = gateApi(apiRaw, () => !!game.user?.isGM, () => ui.notifications.warn("Red Book: GM only."));
