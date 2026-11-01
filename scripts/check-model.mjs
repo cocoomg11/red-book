@@ -2,8 +2,9 @@
  * Scene readiness check: the pure part (no Foundry calls; tested in Node). check.mjs reads a scene into plain "facts" and the paths
  * into a result map; checkScene() turns them into findings. Nothing here (or there) changes a document.
  *
- * Finding: { rule, severity: "problem" | "warning" | "note", text, fix: { kind, id } | null }
+ * Finding: { rule, severity: "problem" | "warning" | "note", text, fix: { kind, id } | null, key }
  *   fix kinds: "scene" (scene config), "token", "actor", "tile", "drawing", "note", "sound", "playlist", "journal", "users", "light".
+ *   key: stable id of this one finding, used to ignore it (see findingKey).
  */
 import { esc, plural } from "./const.mjs";
 
@@ -54,14 +55,16 @@ const slow = (paths, p) => !!p && paths?.[p] === null;
  */
 export function checkScene(f, { paths = {}, off = [], players = [], dnd5e = false, matt = false } = {}) {
   const out = []; const want = id => !off.includes(id);
-  const add = (rule, severity, text, fix = null) => out.push({ rule, severity, text, fix });
+  // `variant` tells apart two findings of one rule about the same thing; `subject` is the thing (default: the fix target unless it's the scene).
+  const add = (rule, severity, text, fix = null, { variant = "", subject } = {}) =>
+    out.push({ rule, severity, text, fix, key: findingKey(rule, subject ?? (fix && fix.kind !== "scene" ? fix.id : ""), variant) });
   const theatre = isTheatre(f);
   const tokens = f.tokens ?? [];
 
   if (want("background")) {
     if (!f.background) { if (!theatre || !(f.tiles ?? []).length) add("background", theatre ? "note" : "warning", "No background image.", { kind: "scene", id: f.id }); }
-    else if (bad(paths, f.background)) add("background", "problem", `Background image doesn't load: ${f.background}`, { kind: "scene", id: f.id });
-    else if (slow(paths, f.background)) add("background", "note", `Background image couldn't be checked: ${f.background}`, { kind: "scene", id: f.id });
+    else if (bad(paths, f.background)) add("background", "problem", `Background image doesn't load: ${f.background}`, { kind: "scene", id: f.id }, { variant: "broken" });
+    else if (slow(paths, f.background)) add("background", "note", `Background image couldn't be checked: ${f.background}`, { kind: "scene", id: f.id }, { variant: "unchecked" });
   }
   if (want("grid") && !theatre && f.gridType === 0) add("grid", "note", "Gridless scene with tokens on it.", { kind: "scene", id: f.id });
   if (want("walls") && !theatre && !f.walls?.count) add("walls", "warning", "No walls: tokens can see and move through everything.", { kind: "scene", id: f.id });
@@ -78,41 +81,99 @@ export function checkScene(f, { paths = {}, off = [], players = [], dnd5e = fals
     if (!pc && t.linked && t.actorId) { const l = linkedNpc.get(t.actorId) ?? []; l.push(t); linkedNpc.set(t.actorId, l); }
     if (want("tokenImage") && bad(paths, t.img)) add("tokenImage", "problem", `${label}: image doesn't load: ${t.img}`, { kind: "token", id: t.id });
     if (want("npcStats") && dnd5e && !pc && t.actorType === "npc") {
-      if (!(Number(t.hpMax) > 0)) add("npcStats", "warning", `${label}: no hit points (max 0).`, { kind: "actor", id: t.actorUuid });
-      if (t.cr === null || t.cr === undefined || t.cr === "") add("npcStats", "note", `${label}: no challenge rating.`, { kind: "actor", id: t.actorUuid });
+      if (!(Number(t.hpMax) > 0)) add("npcStats", "warning", `${label}: no hit points (max 0).`, { kind: "actor", id: t.actorUuid }, { variant: "hp", subject: t.id });
+      if (t.cr === null || t.cr === undefined || t.cr === "") add("npcStats", "note", `${label}: no challenge rating.`, { kind: "actor", id: t.actorUuid }, { variant: "cr", subject: t.id });
     }
   }
-  if (want("tokenLink")) for (const [, list] of linkedNpc) if (list.length > 1) add("tokenLink", "warning", `${list[0].name}: ${list.length} tokens share one linked NPC actor (damage to one hits all).`, { kind: "token", id: list[0].id });
+  if (want("tokenLink")) for (const [, list] of linkedNpc) if (list.length > 1) add("tokenLink", "warning", `${list[0].name}: ${list.length} tokens share one linked NPC actor (damage to one hits all).`, { kind: "token", id: list[0].id }, { variant: "shared", subject: list[0].actorId });
 
   if (want("sounds")) {
     for (const s of f.sounds ?? []) {
       if (!s.path) add("sounds", "warning", `Ambient sound with no file.`, { kind: "sound", id: s.id });
-      else if (bad(paths, s.path)) add("sounds", "problem", `Ambient sound doesn't load: ${s.path}`, { kind: "sound", id: s.id });
+      else if (bad(paths, s.path)) add("sounds", "problem", `Ambient sound doesn't load: ${s.path}`, { kind: "sound", id: s.id }, { variant: "broken" });
     }
-    if (f.playlist?.set && !f.playlist.exists) add("sounds", "problem", "The scene's playlist was deleted.", { kind: "scene", id: f.id });
-    if (f.playlist?.soundSet && !f.playlist.soundExists) add("sounds", "problem", "The scene's playlist sound was deleted.", { kind: "scene", id: f.id });
-    for (const p of f.playlist?.paths ?? []) if (bad(paths, p.path)) add("sounds", "problem", `Playlist "${p.playlist}": ${p.name} doesn't load: ${p.path}`, { kind: "playlist", id: p.playlistId });
+    if (f.playlist?.set && !f.playlist.exists) add("sounds", "problem", "The scene's playlist was deleted.", { kind: "scene", id: f.id }, { variant: "playlist" });
+    if (f.playlist?.soundSet && !f.playlist.soundExists) add("sounds", "problem", "The scene's playlist sound was deleted.", { kind: "scene", id: f.id }, { variant: "playlistSound" });
+    for (const p of f.playlist?.paths ?? []) if (bad(paths, p.path)) add("sounds", "problem", `Playlist "${p.playlist}": ${p.name} doesn't load: ${p.path}`, { kind: "playlist", id: p.playlistId }, { variant: "playlistFile", subject: `${p.playlistId}.${p.soundId || p.name}` });
   }
   if (want("images")) {
-    for (const t of f.tiles ?? []) if (bad(paths, t.img)) add("images", "problem", `Tile image doesn't load: ${t.img}`, { kind: "tile", id: t.id });
-    for (const d of f.drawings ?? []) if (bad(paths, d.img)) add("images", "problem", `Drawing texture doesn't load: ${d.img}`, { kind: "drawing", id: d.id });
-    for (const n of f.notes ?? []) if (bad(paths, n.img)) add("images", "warning", `Map note icon doesn't load: ${n.img}`, { kind: "note", id: n.id });
+    for (const t of f.tiles ?? []) if (bad(paths, t.img)) add("images", "problem", `Tile image doesn't load: ${t.img}`, { kind: "tile", id: t.id }, { variant: "tile" });
+    for (const d of f.drawings ?? []) if (bad(paths, d.img)) add("images", "problem", `Drawing texture doesn't load: ${d.img}`, { kind: "drawing", id: d.id }, { variant: "drawing" });
+    for (const n of f.notes ?? []) if (bad(paths, n.img)) add("images", "warning", `Map note icon doesn't load: ${n.img}`, { kind: "note", id: n.id }, { variant: "note" });
   }
   if (want("notes")) for (const n of f.notes ?? []) {
     const label = n.label ? `Map note "${n.label}"` : "Map note";
-    if (n.entryId && !n.entryExists) add("notes", "problem", `${label}: its journal was deleted.`, { kind: "note", id: n.id });
-    else if (n.pageId && !n.pageExists) add("notes", "problem", `${label}: its page was deleted.`, { kind: "note", id: n.id });
-    else if (!n.entryId) add("notes", "note", `${label} isn't linked to a journal.`, { kind: "note", id: n.id });
+    if (n.entryId && !n.entryExists) add("notes", "problem", `${label}: its journal was deleted.`, { kind: "note", id: n.id }, { variant: "journal" });
+    else if (n.pageId && !n.pageExists) add("notes", "problem", `${label}: its page was deleted.`, { kind: "note", id: n.id }, { variant: "page" });
+    else if (!n.entryId) add("notes", "note", `${label} isn't linked to a journal.`, { kind: "note", id: n.id }, { variant: "unlinked" });
   }
-  if (want("activeTiles") && matt) for (const r of f.matt ?? []) if (r.exists === false) add("activeTiles", "problem", `Active tile action ${r.index + 1} (${r.action || "action"}) points at a missing document: ${r.uuid}`, { kind: "tile", id: r.tileId });
+  if (want("activeTiles") && matt) for (const r of f.matt ?? []) if (r.exists === false) add("activeTiles", "problem", `Active tile action ${r.index + 1} (${r.action || "action"}) points at a missing document: ${r.uuid}`, { kind: "tile", id: r.tileId }, { subject: `${r.tileId}.${r.index}.${r.uuid}` });
   if (want("sceneJournal")) {
-    if (f.journal?.set && !f.journal.exists) add("sceneJournal", "problem", "The journal linked in the scene config was deleted.", { kind: "scene", id: f.id });
-    else if (f.journal?.pageSet && !f.journal.pageExists) add("sceneJournal", "problem", "The journal page linked in the scene config was deleted.", { kind: "scene", id: f.id });
+    if (f.journal?.set && !f.journal.exists) add("sceneJournal", "problem", "The journal linked in the scene config was deleted.", { kind: "scene", id: f.id }, { variant: "journal" });
+    else if (f.journal?.pageSet && !f.journal.pageExists) add("sceneJournal", "problem", "The journal page linked in the scene config was deleted.", { kind: "scene", id: f.id }, { variant: "page" });
   }
   if (want("players")) for (const u of players) if (!u.hasCharacter) add("players", "warning", `${u.name} is connected with no character assigned.`, { kind: "users", id: u.id });
 
   const rank = s => SEVERITIES.indexOf(s);
   return out.sort((a, b) => rank(a.severity) - rank(b.severity));
+}
+
+// ---------------------------------------------------------------- ignored findings
+/**
+ * A finding's stable key: `rule[.variant][:subject]`. Scene-wide findings have no subject (key = rule id, or rule.variant when one rule
+ * can say two different things about the scene); findings about a token, tile, note, sound, user… end in that thing's id.
+ */
+export function findingKey(rule, subject = "", variant = "") {
+  return `${rule}${variant ? `.${variant}` : ""}${subject ? `:${subject}` : ""}`;
+}
+export const IGNORED_FLAG = "ignoredChecks";
+export const IGNORED_VERSION = 1;
+export const IGNORED_MAX = 500;
+/**
+ * The ignored-findings store kept on each scene, `flags.red-book.ignoredChecks`: { v, entries: [{ key, at, by, name }] }
+ * (`at` ms time stamp, `by` user id, `name` that user's name then). Entries are kept even when the finding stops showing up.
+ * An array, not an object keyed by finding key, so a write replaces the whole list (no key-deletion syntax needed).
+ */
+export function normalizeIgnored(raw) {
+  const list = Array.isArray(raw?.entries) ? raw.entries : [];
+  const seen = new Map();
+  for (const e of list) {
+    if (!e || typeof e.key !== "string" || !e.key) continue;
+    seen.delete(e.key);
+    seen.set(e.key, { key: e.key.slice(0, 300), at: Number(e.at) || 0, by: String(e.by ?? ""), name: String(e.name ?? "") });
+  }
+  return { v: IGNORED_VERSION, entries: [...seen.values()].slice(-IGNORED_MAX) };
+}
+/** The store with `key` ignored (an existing entry for it is replaced; past the cap the oldest go). */
+export function addIgnored(raw, key, { by = "", name = "", now = Date.now(), max = IGNORED_MAX } = {}) {
+  const s = normalizeIgnored(raw);
+  const entries = [...s.entries.filter(e => e.key !== key), { key, at: now, by, name }];
+  return { v: IGNORED_VERSION, entries: entries.slice(-max) };
+}
+/** The store without `key`. */
+export function removeIgnored(raw, key) {
+  const s = normalizeIgnored(raw);
+  return { v: IGNORED_VERSION, entries: s.entries.filter(e => e.key !== key) };
+}
+/** Splits findings into { active, ignored }; each ignored finding carries its entry as `ignore`. Unmatched entries are left alone. */
+export function splitIgnored(findings = [], raw) {
+  const byKey = new Map(normalizeIgnored(raw).entries.map(e => [e.key, e]));
+  const active = [], ignored = [];
+  for (const f of findings) { const e = f?.key && byKey.get(f.key); if (e) ignored.push({ ...f, ignore: e }); else active.push(f); }
+  return { active, ignored };
+}
+/**
+ * A scene's result with the ignore store applied: `all` every finding, `findings` the ones that count, `ignored` the hidden ones,
+ * `tally` of `findings` only, `stored` how many entries the scene's store holds (shown or not).
+ */
+export function applyIgnored(result, raw) {
+  const all = result.all ?? result.findings ?? [];
+  const { active, ignored } = splitIgnored(all, raw);
+  return { ...result, all, findings: active, ignored, tally: tally(active), stored: normalizeIgnored(raw).entries.length };
+}
+/** Ids of the scenes whose store has entries: [{ id, flags }] in, ids out (for "Clear all ignored warnings"). */
+export function scenesWithIgnored(scenes = []) {
+  return scenes.filter(s => normalizeIgnored(s?.flags?.["red-book"]?.[IGNORED_FLAG]).entries.length).map(s => s.id);
 }
 
 /** Counts per severity. */
@@ -203,8 +264,11 @@ export class PathCache {
 }
 
 /** The report page for one scene (exported to a GM-only journal page). */
-export function reportHTML(sceneName, findings = [], when = "") {
+export function reportHTML(sceneName, findings = [], when = "", ignored = []) {
   const t = tally(findings);
-  const rows = findings.map(x => `<li><strong>${esc(x.severity)}</strong> · ${esc(RULES[x.rule]?.label ?? x.rule)}: ${esc(x.text)}</li>`).join("");
-  return `<p><strong>${esc(sceneName)}</strong>${when ? ` · checked ${esc(when)}` : ""} · ${esc(tallyText(t))}.</p>${rows ? `<ul>${rows}</ul>` : "<p>Nothing to fix.</p>"}`;
+  const line = x => `<strong>${esc(x.severity)}</strong> · ${esc(RULES[x.rule]?.label ?? x.rule)}: ${esc(x.text)}`;
+  const rows = findings.map(x => `<li>${line(x)}</li>`).join("");
+  const ign = ignored.map(x => `<li><em>ignored</em> · ${line(x)}${x.ignore?.name ? ` (by ${esc(x.ignore.name)}${x.ignore.at ? `, ${esc(isoDay(x.ignore.at))}` : ""})` : ""}</li>`).join("");
+  return `<p><strong>${esc(sceneName)}</strong>${when ? ` · checked ${esc(when)}` : ""} · ${esc(tallyText(t))}${ignored.length ? ` · ${ignored.length} ignored` : ""}.</p>${rows ? `<ul>${rows}</ul>` : "<p>Nothing to fix.</p>"}${ign ? `<p><strong>Ignored (${ignored.length})</strong></p><ul>${ign}</ul>` : ""}`;
 }
+const isoDay = ms => { try { return new Date(ms).toISOString().slice(0, 10); } catch { return ""; } };
