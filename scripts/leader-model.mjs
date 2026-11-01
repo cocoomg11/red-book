@@ -1,107 +1,100 @@
 /**
- * Leader election among the browser tabs (clients) of the active GM user, and request de-duplication. Pure: no Foundry calls; the
- * clock, the random source and the send function are passed in, so it is tested in Node.
+ * Pure helpers for "exactly one client acts" (no Foundry calls; tested in Node). Same approach as the companion toolkit's gm-model.
  *
- * Why: Foundry's "active GM" is a user, not a client. One GM with two tabs open runs every hook twice, so automatic writes happen twice.
- * Each client picks a session id at load; GM clients announce themselves over the module socket ("hello", then a heartbeat). Among the
- * live clients of the active GM user, the lowest id leads. Ids start with the load time, so the oldest tab leads and a tab opened later
- * never takes over from a working leader. A lone client leads once the short settle window has passed with nobody answering. A leader
- * that closes says "bye" (hand-over at once); one that vanishes stops sending heartbeats and drops out after TTL_MS.
+ * Foundry's active GM is a user, but one GM user can be logged in on several clients (two tabs, a laptop and a desktop). Each of those
+ * clients would think it is the active GM, so every automatic write would happen once per tab. Each GM client therefore takes a
+ * random session id at load and announces it over the module socket; among the live sessions of the active GM user, the one that
+ * started first (ties: the lowest id) is the leader, and only the leader records and writes.
+ *
+ * Liveness: a client pings every HEARTBEAT_MS and every other GM client answers "here" at once. A peer counts as alive when it was
+ * heard after this client's previous ping (minus a grace). Measuring against our own pings, not the wall clock, keeps a background
+ * tab (whose timers the browser slows to once a minute) from being declared dead: it still answers pings straight away, because socket
+ * messages are not throttled. A tab that closes says "bye" (hand-over at once); one that crashes drops out after two missed pings.
+ * A lone client always counts itself, so it leads once the short settle window has passed.
  */
-export const HEARTBEAT_MS = 4000;
-export const TTL_MS = 10000;
-export const SETTLE_MS = 1500;
+export const HEARTBEAT_MS = 2000;
+export const GRACE_MS = 1000;
+export const SETTLE_MS = 800;
+export const SEEN_MAX = 200;
 
-/** A client session id: load time (base 36, fixed width, so ids sort by age) plus a random tail. */
-export function makeClientId(now = Date.now(), rand = Math.random) {
-  const t = Math.max(0, Math.floor(now)).toString(36).padStart(10, "0");
-  const r = Math.floor(rand() * 36 ** 6).toString(36).padStart(6, "0");
-  return `${t}-${r}`;
+const ID_RE = /^[A-Za-z0-9_-]{4,64}$/;
+
+/** A random session or request id (letters and digits). `rand` is for tests. */
+export function newId(rand = Math.random, length = 16) {
+  const abc = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let s = ""; for (let i = 0; i < length; i++) s += abc[Math.floor(rand() * abc.length) % abc.length];
+  return s;
+}
+
+/** Ordering of sessions: earliest start first, then lowest id. */
+export function compareSessions(a, b) {
+  if (a.since !== b.since) return a.since < b.since ? -1 : 1;
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+}
+
+/** The cut-off for "still alive": heard after this client's previous ping, minus a grace. `prevPing` null: everyone counts. */
+export function aliveCutoff(prevPing, grace = GRACE_MS) {
+  return typeof prevPing === "number" && Number.isFinite(prevPing) ? prevPing - grace : -Infinity;
 }
 
 /**
- * The leading client id, or null. `clients`: [{ cid, uid, seen }] (seen: last time heard, ms; the client itself can pass seen = now).
- * Only clients of `gmUserId` that were heard within `ttl` count. Lowest id wins.
+ * The leader's session id among `sessions` ([{ id, userId, since, seen }]) for GM user `gmUserId`, or null. Sessions last seen before
+ * `cutoff` are ignored; `self` always counts while it belongs to that user.
  */
-export function electLeader(clients = [], gmUserId = null, now = Date.now(), ttl = TTL_MS) {
+export function leaderOf(sessions = [], { gmUserId, cutoff = -Infinity, self = null } = {}) {
   if (!gmUserId) return null;
-  const live = clients.filter(c => c && c.cid && c.uid === gmUserId && now - (Number(c.seen) || 0) <= ttl).map(c => String(c.cid)).sort();
-  return live[0] ?? null;
+  const live = sessions.filter(s => s && s.userId === gmUserId && s.id !== self?.id && (s.seen ?? -Infinity) >= cutoff);
+  if (self && self.userId === gmUserId) live.push(self);
+  return live.sort(compareSessions)[0]?.id ?? null;
+}
+
+export function isLeader(sessions, { gmUserId, cutoff, self }) {
+  return !!self && self.userId === gmUserId && leaderOf(sessions, { gmUserId, cutoff, self }) === self.id;
+}
+
+/** Drops sessions last seen before `cutoff`. */
+export function prune(sessions = [], cutoff = -Infinity) { return sessions.filter(s => (s.seen ?? -Infinity) >= cutoff); }
+
+/** A session socket message { action: "leader", op: "ping" | "here" | "bye", sid, since } read safely, or null. */
+export function readSessionMessage(msg) {
+  if (!msg || msg.action !== "leader" || !["ping", "here", "bye"].includes(msg.op)) return null;
+  if (typeof msg.sid !== "string" || !ID_RE.test(msg.sid)) return null;
+  const since = Number(msg.since);
+  return { op: msg.op, sid: msg.sid, since: Number.isFinite(since) ? since : 0 };
+}
+
+/** Applies a session message from `userId` (Foundry's sender id, never the message's word) at `now`. Returns the new table. */
+export function applySessionMessage(sessions = [], m, userId, now = 0) {
+  if (!m || !userId) return sessions;
+  const rest = sessions.filter(s => s.id !== m.sid);
+  if (m.op === "bye") return rest;
+  return [...rest, { id: m.sid, userId, since: m.since, seen: now }];
+}
+
+/** The active GM user: Foundry's pick when it is an active GM, else the active GM with the lowest id, else null. */
+export function pickActiveGM(users = [], declared = null) {
+  if (declared && declared.isGM && declared.active) return declared;
+  return [...users].filter(u => u?.isGM && u.active).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))[0] ?? null;
 }
 
 /**
- * The election state of one client. `self`: { cid, uid, isGM }. `send(msg)` broadcasts on the socket. `activeGM()` returns the active
- * GM user's id (or null). `now()` the clock. Call start() at ready, receive(msg, now) for every socket message, tick() every few
- * seconds (heartbeat + expiry) and stop() when the page goes. onChange(isLeader, leaderCid) fires when this client's leadership flips.
+ * A bounded "seen before" cache for request ids. firstTime(id) is true the first time (and remembers it), false after. Missing ids
+ * always pass. The oldest ids drop off past `max`.
  */
-export class Election {
-  constructor({ self, send, activeGM, now = () => Date.now(), onChange = () => {}, ttl = TTL_MS, settle = SETTLE_MS }) {
-    this.self = self; this.send = send; this.activeGM = activeGM; this.now = now; this.onChange = onChange;
-    this.ttl = ttl; this.settle = settle; this.peers = new Map(); this.startedAt = null; this.leading = false; this.stopped = false;
-  }
-  /** Whether this client takes part: only GM users' clients do. Players never lead and never send. */
-  get eligible() { return !!this.self?.isGM; }
-  start() {
-    if (!this.eligible) return;
-    this.startedAt = this.now();
-    this.send({ action: "hello", cid: this.self.cid, uid: this.self.uid, reply: false });
-  }
-  stop() {
-    if (!this.eligible || this.stopped) return;
-    this.stopped = true;
-    this.send({ action: "bye", cid: this.self.cid, uid: this.self.uid });
-    this.#set(false);
-  }
-  /** Handles one election message; returns true when it was one. */
-  receive(msg, now = this.now()) {
-    if (!msg || typeof msg !== "object" || !["hello", "beat", "bye"].includes(msg.action)) return false;
-    if (!this.eligible || this.stopped || typeof msg.cid !== "string" || msg.cid === this.self.cid) return true;
-    if (msg.action === "bye") this.peers.delete(msg.cid);
-    else {
-      const known = this.peers.has(msg.cid);
-      this.peers.set(msg.cid, { cid: msg.cid, uid: String(msg.uid ?? ""), seen: now });
-      // A newcomer's hello is answered so it learns about us within its settle window.
-      if (msg.action === "hello" && !msg.reply && !known) this.send({ action: "hello", cid: this.self.cid, uid: this.self.uid, reply: true });
-    }
-    this.evaluate(now);
-    return true;
-  }
-  /** Heartbeat and expiry. */
-  tick(now = this.now()) {
-    if (!this.eligible || this.stopped) return;
-    this.send({ action: "beat", cid: this.self.cid, uid: this.self.uid });
-    for (const [cid, p] of this.peers) if (now - p.seen > this.ttl * 3) this.peers.delete(cid);
-    this.evaluate(now);
-  }
-  /** The leading client id as this client sees it (null while still settling and alone). */
-  leader(now = this.now()) {
-    if (!this.eligible || this.stopped) return null;
-    const list = [...this.peers.values(), { cid: this.self.cid, uid: this.self.uid, seen: now }];
-    return electLeader(list, this.activeGM(), now, this.ttl);
-  }
-  get settled() { return this.startedAt != null && this.now() - this.startedAt >= this.settle; }
-  evaluate(now = this.now()) {
-    const lead = this.leader(now);
-    this.#set(this.settled && lead === this.self.cid, lead);
-    return this.leading;
-  }
-  #set(v, lead = null) {
-    if (this.leading === v) return;
-    this.leading = v; this.onChange(v, lead);
-  }
+export function seenCache(max = SEEN_MAX) {
+  const ids = new Set();
+  return {
+    firstTime(id) {
+      if (typeof id !== "string" || !id) return true;
+      if (ids.has(id)) return false;
+      ids.add(id);
+      while (ids.size > max) ids.delete(ids.values().next().value);
+      return true;
+    },
+    has: id => ids.has(id),
+    get size() { return ids.size; }
+  };
 }
 
-/** Remembers the last `max` request ids; seen(rid) is true for a repeat. */
-export class Deduper {
-  constructor(max = 200) { this.max = Math.max(1, max); this.ids = new Map(); }
-  seen(rid) {
-    if (!rid) return false;
-    if (this.ids.has(rid)) return true;
-    this.ids.set(rid, true);
-    while (this.ids.size > this.max) this.ids.delete(this.ids.keys().next().value);
-    return false;
-  }
-}
-
-/** A request id: the sending client's id, a counter and the time. */
-export function makeRequestId(cid, n, now = Date.now()) { return `${cid}:${n}:${Math.floor(now).toString(36)}`; }
+/** A request id from a socket message, or null. */
+export function requestId(msg) { return typeof msg?.rid === "string" && ID_RE.test(msg.rid) ? msg.rid : null; }
