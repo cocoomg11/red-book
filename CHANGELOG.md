@@ -12,15 +12,19 @@
 - **Who's online panel**: a themed header with a count pill (for example 3/4). Drag it by the header (no longer the title text). A new **fold button** in the header folds the panel to its header; each browser remembers it (client setting `onlineHudCollapsed`). Tab to the button and press Enter or Space to fold or unfold. `api.online.toggleCollapsed(value?)` is new.
 - **Remove Red Book data › Reset settings** now also resets this browser's own client settings (the Who's online panel spot and fold).
 - New strings are in `lang/en.json` and can be translated.
-- Built on **wanderers-core 0.3.0** and its shared stylesheet (loaded before Red Book's own). CI uses core's checks v0.3.0.
+- Built on **wanderers-core 0.3.1** and its shared stylesheet (loaded before Red Book's own; revision 2). CI uses core's checks v0.3.1.
+
+### Added
+- **Wanderer's Satchel**: when that hub module is active, Red Book registers itself there (its own control panel button, its health check, the debug-logging switch; its record settings are left out of the Satchel's settings export and import). Red Book works the same without it; it's listed as recommended, not required.
 
 ### Live test checklist (Untested in Foundry)
 
-Unit tests (86) cover the sidebar (pages, groups, one tab stop, muted tools, keyboard index), the old tab-name mapping, the timeline filter and its cap, the timeline rows, the dnd5e HP reading (null values, effectiveMax, temporary max, clamping) and the roster (players only, no HP off dnd5e, which actor changes refresh it), the session, board, scene check, Online, past sessions, settings, health, data and Session Start pages, the scene-check categories (display only) and results memory (cap), the Hub panel header and fold button, the new client setting and the reset covering it, every new string in `lang/en.json`, and the stylesheet order and scoping. Check these in a live v14 world (dnd5e 6.x), one GM and at least one player:
+Unit tests (93) cover the sidebar (pages, groups, one tab stop, muted tools, keyboard index), the old tab-name mapping, the timeline filter and its cap, the timeline rows, the dnd5e HP reading (null values, effectiveMax, temporary max, clamping) and the roster (players only, no HP off dnd5e, which actor changes refresh it), the session, board, scene check, Online, past sessions, settings, health, data and Session Start pages, the scene-check categories (display only) and results memory (cap), the Hub panel header and fold button, the new client setting and the reset covering it, every new string in `lang/en.json`, the stylesheet order and scoping (no file names a revision class), and the Satchel registration (fields, records skipped, only when active, waits for its ready hook, refusals and errors reported). Check these in a live v14 world (dnd5e 6.x), one GM and at least one player:
 
 **Look**
 - [ ] The Red Book window, Session Start and Who's online look like Foundry v14 in the **dark** theme and in the **light** theme (text readable, badges, banners and HP bars coloured, no stray backgrounds). Dialogs (End session, Quick note, Share as recap) still look right.
-- [ ] **Narrow window**: resize the Red Book window below about 720 px wide: the sidebar becomes a strip, the session columns, board and scene check stack, nothing is cut off. Make it short: pages scroll and no panel is squashed to nothing (this is the local **flex-shrink override**, `.rb-app … .wc-main > * { flex-shrink: 0 }`; drop it after core 0.3.1 and check again).
+- [ ] **Narrow window**: resize the Red Book window below about 720 px wide: the sidebar becomes a strip, the session columns, board and scene check stack, nothing is cut off. Between 720 and 980 px the board has two columns. Make it short (for example 1000×450 and 640×720): pages scroll and no panel or table is squashed to nothing (core 0.3.1's fix; Red Book no longer has its own override).
+- [ ] With another module still on core 0.3.0 open at the same time, both windows keep their own look.
 
 **Window and keyboard**
 - [ ] The **Red Book** token-control button, Module Settings › *Open the control panel* and `api.panel()` open the window on the Session page. `api.panel("board")`, `api.panel("overview")` and `api.panel("start")` open Board, Session and Tool settings › Session Start. For a player, `api.panel()` warns "GM only".
@@ -50,6 +54,11 @@ Unit tests (86) cover the sidebar (pages, groups, one tab stop, muted tools, key
 - [ ] **Who's online drag**: drag by the header (not by the fold button) moves it and it stays after reload; double-click the header puts it back.
 - [ ] **HUD collapse persistence**: the fold button folds and unfolds; reload: it stays folded in that browser only (another browser or player is unaffected). Keyboard: Tab to the button, Enter or Space folds it and doesn't pause the game. Remove Red Book data › Reset settings unfolds it again.
 - [ ] Online page and *Open as a window* show the same board; *Put the panel back* resets the spot.
+
+**Wanderer's Satchel registration**
+- [ ] With the Satchel active: its hub lists Red Book as registered (not the built-in adapter); *Open panel* opens the Red Book window; its health check shows Red Book's report; *Debug logging for all* turns Red Book's *Debug logging* on and off; Settings transfer › Export leaves out `openSession`, `migrations`, `boardPins`, `onlineHudPos` and `onlineHudCollapsed`. No warning from the Satchel in the console.
+- [ ] Load order: works whether Red Book or the Satchel gets ready first (it registers again on `wanderers-satchel.ready`).
+- [ ] Without the Satchel (not installed, or off): no errors, nothing changes.
 
 ## 0.3.0 (2026-11-01)
 

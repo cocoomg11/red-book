@@ -1,8 +1,14 @@
 # Red Book
 
-A Foundry VTT module (v13 and v14, any game system, extra support for dnd5e) that cuts GM prep: it **writes the session log for you while you play**, puts **everything you need for next session on one board**, **checks your scenes before the players see them**, starts the evening in **one click**, and shows **who's online**.
+A Foundry VTT module (v13 and v14, any game system, extra support for dnd5e) that cuts GM prep. Everything lives in **one window** with a sidebar that looks like Foundry itself, in the light and the dark theme:
 
-Every tool can be turned off. A turned-off tool registers nothing.
+- **Session dashboard**: Red Book **writes the session log for you while you play**. See at a glance whether a session is running, add a quick note, filter the timeline, and watch who's at the table (with live hit points on dnd5e).
+- **Next-session board**: active quests, the NPCs, journals and scenes they link to, last session's open threads and your own pins, in three columns.
+- **Scene check**: a read-only audit of your scenes before the players see them, scene list on the left, findings on the right.
+- **Session Start**: pick the scene, activate it, unpause and start the log in one step.
+- **Who's online**: a small panel on Hub scenes that says when everyone's here; it can be moved and folded.
+
+Every tool can be turned off. A turned-off tool registers nothing. With **Wanderer's Satchel** installed, Red Book also shows up in its hub (control panel, health check, debug logging).
 
 <!-- screenshot: the Red Book window, Session page -->
 
@@ -178,6 +184,6 @@ Hooks (fired with `Hooks.callAll` on every client):
 
 ## Building from source
 
-Red Book bundles [wanderers-core](https://github.com/cocoomg11/wanderers-core) in `vendor/wanderers-core/`, pinned in `wanderers-core.lock.json`. Never edit it by hand. Update it with `node vendor/wanderers-core/vendor.mjs update X.Y.Z`; `npm run verify-core` checks it matches the pin.
+Red Book bundles [wanderers-core](https://github.com/cocoomg11/wanderers-core) (0.3.1, including its shared window look) in `vendor/wanderers-core/`, pinned in `wanderers-core.lock.json`. Never edit it by hand. Update it with `node vendor/wanderers-core/vendor.mjs update X.Y.Z`; `npm run verify-core` checks it matches the pin.
 
 `npm test` runs the pure-logic tests with Node's built-in test runner (Node 22); `npm run check` syntax-checks every script; `npm run lint` runs ESLint with core's shared config; `npm run types` runs the JSDoc type check (not in CI yet: the older tool files aren't clean). GitHub Actions runs core's shared checks (pin, syntax, lint, tests; types are switched off there).

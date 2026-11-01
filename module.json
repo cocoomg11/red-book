@@ -1,7 +1,7 @@
 {
   "id": "red-book",
   "title": "Red Book",
-  "description": "Less prep for the GM: a session log that records the game as you play (scenes, combats, downs, rests, loot, time, journals shown, NPCs met, level-ups and quick notes) with a summary and a reviewed player recap; a next-session board with active quests, linked NPCs, journals and scenes, open threads and your pins; a read-only scene readiness check; Session Start (scene, activate, unpause, start the log in one step); and a Who's online panel on Hub scenes. Every tool can be turned off. Works with any system; extra support for dnd5e.",
+  "description": "Less prep for the GM, in one window with a native Foundry look (light and dark). A session dashboard that logs the game as you play (scenes, combats, downs, rests, loot, time, journals shown, NPCs met, level-ups and quick notes), with a filterable timeline, who's at the table (live hit points on dnd5e), a summary and a player recap you review first; a three-column next-session board; a read-only scene readiness check; Session Start (pick the scene, activate, unpause, start the log); and a Who's online panel on Hub scenes. Every tool can be turned off. Works with any system; extra support for dnd5e.",
   "version": "0.4.0",
   "authors": [
     {
