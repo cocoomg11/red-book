@@ -17,6 +17,7 @@ const hasProp = (o, p) => foundry.utils.hasProperty(o, p);
 const getProp = (o, p) => foundry.utils.getProperty(o, p);
 
 /** The leader's in-memory state; other clients keep only `null`. */
+/** @type {any} */
 const R = { entry: null, data: null, dirty: false, timer: null, flushing: null, downed: new Set(), base: new Map(), levels: new Map(), quests: new Map(), travel: null, rolls: new Set(), combats: new Set(), coalescer: null, coalesceTimer: null, time: new M.TimeTotal(), npcTimer: null };
 
 // ---------------------------------------------------------------- reading
@@ -37,7 +38,11 @@ function wtText(t = game.time.worldTime) {
 // ---------------------------------------------------------------- recording (leader only)
 const recording = () => !!R.data?.open && L.isLeader();
 
-/** Adds one event to the open session (leader only). Returns the event or null. */
+/**
+ * Adds one event to the open session (leader only). Returns the event or null.
+ * @param {string} type @param {string} text
+ * @param {{ refs?: any[], data?: any, private?: boolean, thread?: boolean }} [opts]
+ */
 export function record(type, text, { refs = [], data = {}, private: priv = false, thread = false } = {}) {
   if (!recording()) return null;
   if (!M.typeOn(type, offGroups(get))) return null;
@@ -336,7 +341,7 @@ function wrapShow() {
   const J = foundry.documents?.collections?.Journal ?? globalThis.Journal;
   if (!J?.show || J.show.__redBook) return;
   const orig = J.show;
-  const wrapped = async function (doc, options = {}, ...rest) {
+  const wrapped = /** @this {any} */ async function (doc, options = {}, ...rest) {
     const r = await orig.call(this, doc, options, ...rest);
     try { if (doc?.uuid) L.request("journal", { uuid: doc.uuid, force: !!options?.force, users: Array.isArray(options?.users) ? options.users.length : 0 }); } catch { }
     return r;
@@ -368,13 +373,13 @@ export function ready() {
   L.handle("log", (d, user) => { if (user?.isGM) record(String(d.type), String(d.text ?? ""), { refs: d.refs ?? [], private: !!d.private }); });
   L.handle("rest", (d, user) => {
     if (!user) return;
-    let a = null; try { a = fromUuidSync(d.uuid, { strict: false }); } catch { }
+    /** @type {any} */ let a = null; try { a = fromUuidSync(d.uuid, { strict: false }); } catch { }
     if (!(a instanceof Actor) || !a.testUserPermission?.(user, "OWNER")) return;
     record("rest", `${a.name} finished a ${d.long ? "long" : "short"} rest.`, { refs: [a.uuid] });
   });
   L.handle("journal", async (d, user) => {
     if (!user) return;
-    let doc = null; try { doc = await fromUuid(d.uuid); } catch { }
+    /** @type {any} */ let doc = null; try { doc = await fromUuid(d.uuid); } catch { }
     if (doc?.documentName !== "JournalEntry" && doc?.documentName !== "JournalEntryPage") return;
     if (!doc || !doc.testUserPermission?.(user, "OWNER")) return;
     const name = doc.documentName === "JournalEntryPage" ? `${doc.parent?.name}: ${doc.name}` : doc.name;
