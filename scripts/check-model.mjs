@@ -272,3 +272,21 @@ export function reportHTML(sceneName, findings = [], when = "", ignored = []) {
   return `<p><strong>${esc(sceneName)}</strong>${when ? ` · checked ${esc(when)}` : ""} · ${esc(tallyText(t))}${ignored.length ? ` · ${ignored.length} ignored` : ""}.</p>${rows ? `<ul>${rows}</ul>` : "<p>Nothing to fix.</p>"}${ign ? `<p><strong>Ignored (${ignored.length})</strong></p><ul>${ign}</ul>` : ""}`;
 }
 const isoDay = ms => { try { return new Date(ms).toISOString().slice(0, 10); } catch { return ""; } };
+
+/**
+ * GM-only gate for the scene check API. Every member (methods and data like `rules`) goes through `isGM()`: for a non-GM, `deny()`
+ * is called (it shows the notice) and a method returns undefined; data reads as undefined. Pure: the caller supplies both functions.
+ */
+export function gateApi(api, isGM, deny) {
+  const out = {};
+  for (const [k, v] of Object.entries(api)) {
+    Object.defineProperty(out, k, {
+      enumerable: true,
+      get: () => {
+        if (!isGM()) { deny(); return typeof v === "function" ? () => undefined : undefined; }
+        return v;
+      }
+    });
+  }
+  return out;
+}

@@ -95,3 +95,22 @@ test("export lists ignored findings separately, marked ignored", () => {
   assert.match(html, /<strong>Ignored \(1\)<\/strong><\/p><ul><li><em>ignored<\/em> · <strong>warning<\/strong> · Lights in dark scenes: .*\(by GM, 2026-01-02\)<\/li><\/ul>$/);
   assert.doesNotMatch(C.reportHTML("Cave", all, "now"), /Ignored/);
 });
+
+test("gateApi: GM-only scene check API", async () => {
+  let denied = 0; let gm = false;
+  const calls = [];
+  const api = C.gateApi({ run: o => { calls.push(o); return "ran"; }, rules: [1, 2], clearAllIgnored: async () => 3 }, () => gm, () => { denied++; });
+  // Non-GM: methods return undefined, data reads as undefined, each access warns, nothing runs.
+  assert.equal(api.run({ all: true }), undefined);
+  assert.equal(api.rules, undefined);
+  assert.equal(api.clearAllIgnored(), undefined);
+  assert.equal(denied, 3);
+  assert.deepEqual(calls, []);
+  // GM: passes through untouched, no notice.
+  gm = true;
+  assert.equal(api.run({ all: true }), "ran");
+  assert.deepEqual(api.rules, [1, 2]);
+  assert.equal(await api.clearAllIgnored(), 3);
+  assert.equal(denied, 3);
+  assert.deepEqual(Object.keys(api), ["run", "rules", "clearAllIgnored"]);
+});

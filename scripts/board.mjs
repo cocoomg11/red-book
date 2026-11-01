@@ -40,7 +40,7 @@ function rowHTML(uuid, label, extra = "") {
   const gone = !exists(uuid);
   const scene = B.uuidType(uuid) === "Scene" && !gone;
   return `<li class="rb-row ${gone ? "gone" : ""}"><a class="rb-open" data-uuid="${esc(uuid)}">${esc(label || nameOf(uuid, uuid))}</a>${gone ? ` <span class="rb-tag bad">missing</span>` : ""}${extra}
-    ${scene ? `<span class="rb-actions"><button type="button" data-action="view" data-uuid="${esc(uuid)}" data-tooltip="View scene"><i class="fa-solid fa-eye"></i></button>${F.on("sceneCheck") ? `<button type="button" data-action="check" data-uuid="${esc(uuid)}" data-tooltip="Check readiness"><i class="fa-solid fa-clipboard-check"></i></button>` : ""}</span>` : ""}</li>`;
+    ${scene ? `<span class="rb-actions"><button type="button" data-action="view" data-uuid="${esc(uuid)}" data-tooltip="View scene"><i class="fa-solid fa-eye"></i></button>${F.on("sceneCheck") && game.user.isGM ? `<button type="button" data-action="check" data-uuid="${esc(uuid)}" data-tooltip="Check readiness"><i class="fa-solid fa-clipboard-check"></i></button>` : ""}</span>` : ""}</li>`;
 }
 
 export class Board extends foundry.applications.api.ApplicationV2 {
@@ -62,7 +62,7 @@ export class Board extends foundry.applications.api.ApplicationV2 {
       ${col("Pinned", "fa-solid fa-thumbtack", pins)}
       ${col("NPCs", "fa-solid fa-user-group", linkList(m.links.actors, "No NPCs linked from active quests."))}
       ${col("Journals", "fa-solid fa-book-open", linkList([...m.links.journals, ...m.links.other], "No journals linked from active quests."))}
-      ${col("Scenes", "fa-solid fa-map", linkList(m.links.scenes, "No scenes linked from active quests.") + (m.links.scenes.length && F.on("sceneCheck") ? `<button type="button" data-action="checkAll"><i class="fa-solid fa-clipboard-check"></i> Check all these scenes</button>` : ""))}
+      ${col("Scenes", "fa-solid fa-map", linkList(m.links.scenes, "No scenes linked from active quests.") + (m.links.scenes.length && F.on("sceneCheck") && game.user.isGM ? `<button type="button" data-action="checkAll"><i class="fa-solid fa-clipboard-check"></i> Check all these scenes</button>` : ""))}
     </div>`;
     return div;
   }

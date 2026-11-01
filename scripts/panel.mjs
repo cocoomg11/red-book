@@ -43,7 +43,7 @@ export class ControlPanel extends foundry.applications.api.ApplicationV2 {
           ${btn("note", "fa-solid fa-pen", "Quick note", F.on("sessionLog") && !!open)}
           ${btn("recap", "fa-solid fa-share-from-square", "Share last session as recap", F.on("sessionLog"))}
           ${btn("board", "fa-solid fa-thumbtack", "Next-session board", F.on("prepBoard"))}
-          ${btn("check", "fa-solid fa-clipboard-check", "Check scenes…", F.on("sceneCheck"))}
+          ${btn("check", "fa-solid fa-clipboard-check", "Check scenes…", F.on("sceneCheck") && game.user.isGM)}
         </div>`;
     }
     if (t.id === "features") return `<h2>Features</h2><p class="hint">A tool that's off registers nothing (no hooks, buttons or key bindings). Changes reload the world.</p>
@@ -52,7 +52,7 @@ export class ControlPanel extends foundry.applications.api.ApplicationV2 {
     const off = t.feature && !F.on(t.feature);
     const { basic, advanced } = S.tabRows(t.id);
     const extra = t.id === "data" ? `<div class="rb-buttons"><button type="button" data-run="cleanup"><i class="fa-solid fa-broom"></i> Remove Red Book data…</button></div>`
-      : t.id === "check" && !off ? `<div class="rb-buttons"><button type="button" data-run="clearIgnored"><i class="fa-solid fa-eraser"></i> Clear all ignored warnings…</button></div><p class="hint">Stops ignoring every finding you ignored in the readiness window, on every scene (asks first).</p>` : "";
+      : t.id === "check" && !off && game.user.isGM ? `<div class="rb-buttons"><button type="button" data-run="clearIgnored"><i class="fa-solid fa-eraser"></i> Clear all ignored warnings…</button></div><p class="hint">Stops ignoring every finding you ignored in the readiness window, on every scene (asks first).</p>` : "";
     return `<h2>${esc(t.label)}</h2>${off ? `<p class="rb-warn"><i class="fa-solid fa-power-off"></i> This tool is turned off (Features tab).</p>` : ""}
       ${basic.map(s => rowHTML(s, off)).join("")}
       ${advanced.length ? `<details class="rb-advanced"><summary>Advanced</summary>${advanced.map(s => rowHTML(s, off)).join("")}</details>` : ""}

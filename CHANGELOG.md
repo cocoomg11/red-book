@@ -1,13 +1,14 @@
 # Changelog
 
-## Unreleased (planned 0.2.0)
+## 0.2.0 — 2026-10-31
 
 - **Scene check: ignore a finding.** Each finding in the readiness window has an Ignore button. Ignored findings stop counting toward the totals and the scene's all-clear, and sit in a collapsed *Ignored (n)* list with Un-ignore. Saved per scene in `flags.red-book.ignoredChecks` (`{ v, entries: [{ key, at, by, name }] }`, at most 500), keyed by rule and subject (e.g. `npcStats.hp:<tokenId>` for one NPC, `walls` for a scene-wide rule). Entries whose finding no longer comes up are kept, just not shown. *Clear ignored* per scene in the window; *Clear all ignored warnings…* (with a confirm) on the control panel's Scene check tab. GM only. Export lists ignored findings separately, marked ignored. Remove Red Book data's flags category covers it. API: `sceneCheck.ignored`, `ignore`, `unignore`, `clearIgnored`, `clearAllIgnored`.
+- **Scene check is GM only.** No scene-control button, Scenes context entry, control-panel button or board button for players, and every `api.sceneCheck.*` member warns "GM only" and returns undefined for non-GM users.
 - **Fix:** the "Start a session?" prompt on load now closes when a session is started some other way (panel, token button, API or another GM tab), and a late Yes no longer tries a second start.
 
 ### Untested in Foundry (check in a live world)
 
-Unit tests cover the finding keys, ignore/un-ignore, filtering and counting, per-scene clear and clear-all selection, the export HTML and the prompt logic (59 tests). Check live on v14 (and v13):
+Unit tests cover the finding keys, ignore/un-ignore, filtering and counting, per-scene clear and clear-all selection, the export HTML and the prompt logic and the GM-only API gate (60 tests). Check live on v14 (and v13):
 
 - [ ] Ignore a warning: it leaves the main list, the scene and window totals drop, and it shows under a collapsed *Ignored (1)*. A scene whose only findings are ignored reads "all clear".
 - [ ] Two dnd5e NPC tokens at 0 max HP: ignoring one leaves the other's warning showing.
@@ -17,6 +18,7 @@ Unit tests cover the finding keys, ignore/un-ignore, filtering and counting, per
 - [ ] *Clear ignored* in the window clears only that scene. Multi-scene check: each scene section has its own button.
 - [ ] Control panel › Scene check › *Clear all ignored warnings…*: confirm dialog, then every scene's ignores are gone; an open results window updates. Cancel leaves them.
 - [ ] A player can't write the flag (API calls warn "GM only"; the window is GM-only).
+- [ ] As Player3, no scene check button, context entry or API access.
 - [ ] Export to journal: ignored findings listed under *Ignored (n)* marked *ignored*, with who and when.
 - [ ] Remove Red Book data: dry run lists scenes with ignores under flags; removing clears `flags.red-book.ignoredChecks`.
 - [ ] Start prompt: load the world with no session open, leave the prompt up and start a session from the control panel (and from `api.session.start()`, and from a second GM tab): the prompt closes and only one session is made. Yes / No on the prompt still work as before.

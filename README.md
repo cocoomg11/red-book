@@ -25,7 +25,7 @@ Every tool can be turned off. A turned-off tool registers nothing.
 |---|---|---|
 | Session log | `sessionLog` | Start and end a session; while it's open a GM-only journal fills with a timeline (real and in-world time): scenes activated, combats (combatants, defeated), characters at 0 HP and creatures killed, rests, items and coin gained or lost, world time advanced, journals shown, NPCs met, level-ups, and your quick notes. Ending adds a summary. **Share as recap** makes a player copy you review first. |
 | Next-session board | `prepBoard` | One GM window: active quests and their next objectives, the NPCs, journals and scenes those quests link to, open threads and the summary from the last session, and your own pinned documents. |
-| Scene readiness check | `sceneCheck` | A read-only audit of a scene, a folder or every scene: missing images and sounds, walls and doors, lights, token vision and links, NPC stats, map notes, linked journals, active tile actions and player characters. Each finding has a button that opens the thing to fix. |
+| Scene readiness check | `sceneCheck` | A read-only audit of a scene, a folder or every scene: missing images and sounds, walls and doors, lights, token vision and links, NPC stats, map notes, linked journals, active tile actions and player characters. Each finding has a button that opens the thing to fix. GM only. |
 
 Optional: with **Wayfarer's Toolkit** active, its quests feed the board and its quests, objectives, travel, flights and loot rolls are logged too. With **Monk's Active Tiles** active, tile actions that point at deleted documents are reported.
 
@@ -73,7 +73,7 @@ Open it with the thumbtack button in the token controls, the control panel or `a
 
 <!-- screenshot: the results window -->
 
-Run it from the clipboard button (the viewed scene), the control panel (*Check scenes…*: the viewed scene, one scene, a folder or every scene), the Scenes sidebar's right-click menu (*Check readiness*), the board, or `api.sceneCheck.run()`. It **never changes anything**.
+Run it from the clipboard button (the viewed scene), the control panel (*Check scenes…*: the viewed scene, one scene, a folder or every scene), the Scenes sidebar's right-click menu (*Check readiness*), the board, or `api.sceneCheck.run()`. It **never changes anything**. The whole scene check is **GM only**: players see no button or menu entry, and the API refuses them.
 
 | Check | Severity |
 |---|---|
@@ -122,7 +122,7 @@ Exactly one client records and writes: the active GM user's earliest-opened tab.
 | `session.start()`, `session.end()`, `session.note(text, { thread, private })`, `session.noteDialog()`, `session.current()`, `session.list()`, `session.get(idOrEntry)`, `session.shareRecap(idOrEntry)` | stable |
 | `session.log(type, text, { refs, private })` (add an event from another module), `session.flush()` | experimental |
 | `board.open()`, `board.pins()`, `board.pin(uuid)`, `board.unpin(uuid)`, `board.model()`, `board.refresh()` | experimental |
-| `sceneCheck.run({ scenes, folder, all })`, `sceneCheck.chooser()`, `sceneCheck.checkOne(scene)`, `sceneCheck.exportReport(results)`, `sceneCheck.facts(scene)`, `sceneCheck.rules`, `sceneCheck.clearCache()`, `sceneCheck.ignored(scene)`, `sceneCheck.ignore(scene, key)`, `sceneCheck.unignore(scene, key)`, `sceneCheck.clearIgnored(scene)`, `sceneCheck.clearAllIgnored({ confirm })` | experimental |
+| `sceneCheck.run({ scenes, folder, all })`, `sceneCheck.chooser()`, `sceneCheck.checkOne(scene)`, `sceneCheck.exportReport(results)`, `sceneCheck.facts(scene)`, `sceneCheck.rules`, `sceneCheck.clearCache()`, `sceneCheck.ignored(scene)`, `sceneCheck.ignore(scene, key)`, `sceneCheck.unignore(scene, key)`, `sceneCheck.clearIgnored(scene)`, `sceneCheck.clearAllIgnored({ confirm })` (GM only: for other users every member warns "GM only" and returns undefined) | experimental |
 | `panel(tab)`, `health()`, `cleanup.plan()`, `cleanup.dryRun()`, `cleanup.remove(pick)`, `cleanup.open()`, `features.on(id)`, `features.list()`, `leader()`, `hooks` | experimental |
 
 Hooks (fired with `Hooks.callAll` on every client):

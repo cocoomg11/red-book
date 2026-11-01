@@ -237,7 +237,7 @@ export async function chooser() {
 
 /** Scene directory context menu entry (v13 and v14 entry shapes both given). */
 export function contextOptions(options) {
-  if (!Array.isArray(options)) return;
+  if (!Array.isArray(options) || !game.user?.isGM) return;
   const sceneOf = li => game.scenes.get((li?.dataset ?? li?.[0]?.dataset)?.entryId);
   const go = li => { const s = sceneOf(li); if (s) run({ scenes: [s] }); };
   const icon = `<i class="fa-solid fa-clipboard-check"></i>`;
@@ -249,7 +249,9 @@ export function contextOptions(options) {
   options.push(entry);
 }
 
-export const api = {
+const apiRaw = {
   run, chooser, checkOne, facts: sceneFacts, exportReport, rules: C.RULES, clearCache: () => cache().clear(),
   ignored: scene => C.normalizeIgnored(ignoredOf(scene)).entries, ignore, unignore, clearIgnored, clearAllIgnored
 };
+/** Scene check is GM-only: non-GM users get a "GM only" notice and undefined from every member. */
+export const api = C.gateApi(apiRaw, () => !!game.user?.isGM, () => ui.notifications.warn("Red Book: GM only."));
