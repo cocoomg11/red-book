@@ -124,6 +124,11 @@ export class RedBookApp extends foundry.applications.api.ApplicationV2 {
     }));
     if (hadNavFocus) result.querySelector(".wc-nav.active")?.focus();
     const n = result.querySelector("[name=noteText]"); if (n && note) n.value = note;
+    // Enter in the Next session field saves it (Chromium does no implicit submit from datetime-local, and Save is a plain button).
+    result.querySelector("[name=nextAt]")?.addEventListener("keydown", ev => {
+      if (ev.key !== "Enter") return;
+      ev.preventDefault(); ev.stopPropagation(); this.#saveNext();
+    });
     // Live search in the scene list (no re-render, so the field keeps focus).
     const q = result.querySelector("[data-filter-scenes]");
     q?.addEventListener("input", () => { this.check.query = q.value; filterList(result.querySelector(".rb-scene-list"), q.value); });

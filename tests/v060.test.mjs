@@ -202,3 +202,14 @@ test("past sessions 0.6.0: date range, attendance, XP or milestone column, total
   const m = V.pastPageHTML(list, { mode: "milestone", totals: {} }); noMissing(m); assert.match(m, /<td>M1<\/td>/); assert.ok(!m.includes("Totals"));
   const plain = V.pastPageHTML(list); noMissing(plain); assert.ok(!plain.includes("XP")); assert.ok(!plain.includes("Sat 14"));
 });
+
+test("Enter in the Next session field saves through #saveNext (source check)", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("../scripts/panel.mjs", import.meta.url), "utf8");
+  const m = src.match(/\[name=nextAt\]"\)\?\.addEventListener\("keydown"[\s\S]*?\}\);/);
+  assert.ok(m, "keydown listener on nextAt");
+  assert.match(m[0], /"Enter"/);
+  assert.match(m[0], /preventDefault\(\)/);
+  assert.match(m[0], /stopPropagation\(\)/);
+  assert.match(m[0], /#saveNext\(\)/);
+});

@@ -12,6 +12,9 @@ Five new features, each with its own switch on the Features page (all on by defa
 - **Gained this session** (`gained`): party coin (net, with what was spent) from the toolkit's coin log within the session window, or the log's own coin lines without it, and reward items of quests completed this session (hidden quests left out), as a block in the log and recap. Frozen at session end.
 - Request `sessionEdit` (GM only, schema-checked) for NPC removal, attendance and awards, on open or ended sessions; API `session.edit()`.
 
+### Fixed
+- **Enter in the Next session field now saves** (found in 0.5.0): Chromium does no implicit form submission from a `datetime-local` input and Save is a plain button, so Enter did nothing. The field now handles Enter itself (and keeps it from Foundry's key bindings) and runs the same save as the Save button.
+
 ### Changed
 - **Dates on every log line, sessions past midnight** (user request). Each event stores `at` (ISO 8601, UTC) next to `t`. Times are shown in each viewer's time zone (the window) or the recording GM's (the journal page); a line from a later day than the start shows its date, and day separators / headings mark midnight. Session span *Sat 14 Mar, 7:00 PM – Sun 15 Mar, 1:30 AM* on the Session page, Past sessions, the journal page, the recap and the card. The session's name keeps its start date. Durations and session windows use timestamps only. Setting *Dates on the timeline* (Advanced, on).
 - Stored session version 2. Events without a usable time (older data) get the start date plus their clock reading, rolling to the next day when the clock goes backwards; the first GM load rewrites ended sessions once.
