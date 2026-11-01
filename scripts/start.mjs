@@ -35,6 +35,7 @@ export class StartApp extends foundry.applications.api.ApplicationV2 {
     const div = document.createElement("div"); div.className = "rb-start-body";
     const scenes = this.#scenes();
     if (!scenes.some(s => s.id === this.selected)) this.selected = scenes.find(s => s.id === canvas?.scene?.id)?.id ?? scenes[0]?.id ?? null;
+    /** @type {any} */
     let online = null;
     if (F.on("whosOnline")) { const r = deps.online?.read?.(); if (r) online = { present: r.present, expected: r.expected, all: r.all }; }
     const checkOn = F.on("sceneCheck");

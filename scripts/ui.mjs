@@ -3,7 +3,7 @@ import { ID, esc } from "./const.mjs";
 import { UI_CLASSES as CORE_UI } from "../vendor/wanderers-core/index.mjs";
 
 export const DialogV2 = () => foundry.applications.api.DialogV2;
-export const TextEditorImpl = () => foundry.applications.ux?.TextEditor?.implementation ?? globalThis.TextEditor;
+export const TextEditorImpl = () => foundry.applications.ux?.TextEditor?.implementation ?? /** @type {any} */ (globalThis).TextEditor;
 /** Every Red Book window carries this class: no backdrop blur (styles/red-book.css), shared colours. */
 export const WINDOW = "rb-window";
 /** wanderers-core's shared look (styles/wanderers-ui.css): put on every Red Book window next to WINDOW. */
@@ -35,7 +35,7 @@ const safeSync = uuid => { try { return fromUuidSync(uuid, { strict: false }); }
 export { safeSync };
 /** Opens a document's sheet by UUID (journal pages open in their entry). */
 export async function openUuid(uuid) {
-  let d = null; try { d = await fromUuid(uuid); } catch { }
+  /** @type {any} */ let d = null; try { d = await fromUuid(uuid); } catch { }
   if (!d) return ui.notifications.warn("Red Book: that document no longer exists.");
   if (d.documentName === "JournalEntryPage") return d.parent?.sheet?.render(true, { pageId: d.id });
   if (d.documentName === "Scene") return d.sheet?.render(true);

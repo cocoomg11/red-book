@@ -370,7 +370,7 @@ export const settingRowHTML = (s, v, off = false) => `<div class="form-group"><l
 const saveBar = () => `<footer class="wc-row wc-end rb-save">${btn("", "fa-solid fa-floppy-disk", t("Common.save"), { primary: true, type: "submit" })}</footer>`;
 
 /** Features: one switch per tool. `features`: [{ id, key, label, hint }]. */
-export function featuresPageHTML(features = [], on = () => true) {
+export function featuresPageHTML(/** @type {readonly any[]} */ features = [], /** @type {(id: string) => boolean} */ on = () => true) {
   return `${pageHead(t("Nav.features"))}${hint(t("Features.hint"))}<div class="wc-panel"><div class="wc-panel-body">${features.map(f => `<div class="form-group"><label class="rb-check"><input type="checkbox" name="${esc(f.key)}"${on(f.id) ? " checked" : ""}> <strong>${esc(f.label)}</strong> ${on(f.id) ? badge("ok", t("Common.on"), { small: true }) : badge("off", t("Common.off"), { small: true })}</label><p class="hint">${esc(f.hint)}</p></div>`).join("")}</div></div>${saveBar()}`;
 }
 
@@ -378,6 +378,7 @@ export function featuresPageHTML(features = [], on = () => true) {
  * Tool settings: chips to pick a tool, then its Basic rows and Advanced rows. `tabs`: settings-model TABS of tools; `rows`:
  * { basic, advanced }; `value(key)`; `off`: tool turned off; `extra`: trusted markup (buttons) after the rows.
  */
+/** @param {{ tool: string, tabs?: any[], rows?: { basic: any[], advanced: any[] }, value?: (key: string) => any, off?: boolean, extra?: string }} opts */
 export function toolSettingsHTML({ tool, tabs = [], rows = { basic: [], advanced: [] }, value = () => undefined, off = false, extra = "" }) {
   const chips = `<div class="wc-row rb-chips" role="group" aria-label="${esc(t("Tools.pick"))}">${tabs.map(x => `<button type="button" class="wc-chip" data-action="tool" data-tool="${esc(x.id)}" aria-pressed="${x.id === tool ? "true" : "false"}"><i class="${esc(x.icon)}" aria-hidden="true"></i> ${esc(x.label)}</button>`).join("")}</div>`;
   const n = rows.basic.length + rows.advanced.length;
@@ -397,6 +398,7 @@ export function healthPageHTML(report = []) {
 }
 
 /** Data: debug logging (and any other data-tab rows) and Remove Red Book data. */
+/** @param {{ rows?: { basic: any[], advanced: any[] }, value?: (key: string) => any }} [opts] */
 export function dataPageHTML({ rows = { basic: [], advanced: [] }, value = () => undefined } = {}) {
   const all = [...rows.basic, ...rows.advanced];
   return `${pageHead(t("Nav.data"))}<div class="wc-panel"><div class="wc-panel-body">${all.map(s => settingRowHTML(s, value(s.key))).join("")}</div></div>${all.length ? saveBar() : ""}

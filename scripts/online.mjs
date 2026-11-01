@@ -98,7 +98,7 @@ function renderHud(r) {
   el.innerHTML = V.hudHTML(r, { collapsed, drag });
   el.querySelector(".rb-online-toggle")?.addEventListener("click", ev => { ev.preventDefault(); ev.stopPropagation(); toggleCollapsed(); });
   // Enter and Space press the button; keep them from Foundry's key bindings (Space pauses the game).
-  el.querySelector(".rb-online-toggle")?.addEventListener("keydown", ev => { if (ev.key === " " || ev.key === "Enter") ev.stopPropagation(); });
+  el.querySelector(".rb-online-toggle")?.addEventListener("keydown", /** @param {any} ev */ ev => { if (ev.key === " " || ev.key === "Enter") ev.stopPropagation(); });
   wireDrag(el); place(el);
 }
 
@@ -107,7 +107,7 @@ export async function toggleCollapsed(value) {
   const next = typeof value === "boolean" ? value : get("onlineHudCollapsed") !== true;
   await set("onlineHudCollapsed", next);
   renderHud(read());
-  document.querySelector(`#${HUD_ID} .rb-online-toggle`)?.focus();
+  /** @type {any} */ (document.querySelector(`#${HUD_ID} .rb-online-toggle`))?.focus();
   return next;
 }
 

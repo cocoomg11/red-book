@@ -92,6 +92,7 @@ export class RedBookApp extends foundry.applications.api.ApplicationV2 {
     const open = on ? deps.session.openEntry() : null;
     const latest = on && !open ? deps.session.latest() : null;
     const withUuid = j => (j ? { ...deps.session.dataOf(j), uuid: j.uuid } : null);
+    /** @type {any} */
     let online = null;
     if (F.on("whosOnline")) { const r = deps.online.read(); online = { present: r.present, expected: r.expected }; }
     return V.sessionPageHTML({
@@ -227,6 +228,7 @@ export function openCheck(sceneId) {
   return a.render({ force: true });
 }
 
+/** @type {any} */
 let timer = null;
 /** Re-renders the open window soon (debounced) when it shows `page` (any page when omitted). A no-op when it's closed. */
 export function refresh(page) {
