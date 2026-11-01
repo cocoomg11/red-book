@@ -15,6 +15,6 @@ jobs:
   # tests. ESLint and the JSDoc type check (tsc) are on (package.json lists eslint 10.13.0 and typescript 7.0.2 as devDependencies,
   # with a package-lock.json).
   checks:
-    uses: cocoomg11/wanderers-core/.github/workflows/module-checks.yml@v0.3.1
+    uses: cocoomg11/wanderers-core/.github/workflows/module-checks.yml@v0.5.0
     with:
       types: true

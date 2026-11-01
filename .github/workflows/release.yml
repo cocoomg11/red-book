@@ -53,7 +53,7 @@ jobs:
       - name: Build module.zip
         run: |
           zip -r module.zip module.json scripts styles lang vendor README.md CHANGELOG.md LICENSE \
-            -x 'vendor/wanderers-core/config/*' 'vendor/wanderers-core/vendor.mjs'
+            -x 'vendor/wanderers-core/config/*' 'vendor/wanderers-core/vendor.mjs' 'vendor/wanderers-core/testing/*'
           unzip -l module.zip
 
       - name: Upload release assets
