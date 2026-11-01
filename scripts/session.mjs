@@ -572,7 +572,9 @@ export function ready() {
   });
 
   let prompted = false;
+  let migrated = false;
   L.onLeader(() => {
+    if (!migrated) { migrated = true; migrateTimes().catch(e => warn("0.6.0 time migration", e)); }
     const j = openEntry(); if (j && R.entry?.id !== j.id) load(j);
     if (!prompted && !j && get("startPrompt") !== false) { prompted = true; promptStart(); }
     else prompted = true;
@@ -580,6 +582,20 @@ export function ready() {
   });
   L.onBye(() => { if (R.dirty) flush(); });
   setInterval(() => { if (recording()) flushInventory(); }, 5000);
+}
+
+/**
+ * 0.6.0, leader, once per load: session entries stored before v2 are written back normalized, so every event keeps a full time
+ * (`at`; events without a usable `t` get the start date plus their clock reading, rolling to the next day when it goes back; the
+ * clock readings are read in this GM browser's time zone). The open session is left to its own next write. Idempotent (v ≥ 2 skipped).
+ */
+async function migrateTimes() {
+  for (const j of sessions()) {
+    const raw = j.flags?.[ID]?.session;
+    if (!raw || Number(raw.v) >= M.SESSION_VERSION || j.id === R.entry?.id) continue;
+    const data = dataOf(j);
+    try { await j.update({ [`flags.${ID}.session`]: data }); } catch (e) { warn(`migrating ${j.name}`, e); }
+  }
 }
 
 const PROMPT_ID = `${ID}-start-prompt`;

@@ -1,5 +1,52 @@
 # Changelog
 
+## 0.6.0 (unreleased)
+
+Five new features, each with its own switch on the Features page (all on by default, all need the session log), and full dates on every log line.
+
+### Added
+- **"Previously on…" card** (`previously`): at Session Start (setting *Show "Previously on…" when a session starts*, on) and when the GM clicks **Show to players** on the Session page, players see the last shared recap as a dismissable title card (name, date range, the recap's text). Only the shared recap journal is read, by clients that can observe it. Each browser remembers the recap it has seen (client record `previouslySeen`); *Show to players* shows it again. **Preview** shows it to the clicking GM only. Hook `red-book.previouslyOn` `{ recap, force }` (ids only); request `previously` (GM only).
+- **NPCs met this session** (`npcsMet`): non-player tokens on the active scene or a scene a connected player is viewing are recorded once each (actor id, name, first seen, scene) into the session's `npcs` list, logged as **Met** lines, listed in an *NPCs met* panel and in the summary block / recap. Hidden tokens count once revealed (unless *Count hidden tokens as met*). The GM can take one out: it leaves the list and the Met line and isn't met again that session.
+- **Session timer and break reminder** (`sessionTimer`): hours:minutes since the start on the Session page and live banner, updated every 20 s from the start timestamp. *Remind me to take a break* (off by default) every *N* minutes (default 90): a GM-only notification.
+- **Attendance and experience** (`attendance`): connected players and their characters are added to the session's attendance at start, on connect and on a character change (taken-out rows stay out); add or take out by hand. *Track per session*: experience (per character, GM only: a secret block in the log, never in the recap), milestone (text players see in the recap) or off. Past sessions shows the attendance, XP or milestone per session and totals per character. API `session.totals()`.
+- **Gained this session** (`gained`): party coin (net, with what was spent) from the toolkit's coin log within the session window, or the log's own coin lines without it, and reward items of quests completed this session (hidden quests left out), as a block in the log and recap. Frozen at session end.
+- Request `sessionEdit` (GM only, schema-checked) for NPC removal, attendance and awards, on open or ended sessions; API `session.edit()`.
+
+### Changed
+- **Dates on every log line, sessions past midnight** (user request). Each event stores `at` (ISO 8601, UTC) next to `t`. Times are shown in each viewer's time zone (the window) or the recording GM's (the journal page); a line from a later day than the start shows its date, and day separators / headings mark midnight. Session span *Sat 14 Mar, 7:00 PM – Sun 15 Mar, 1:30 AM* on the Session page, Past sessions, the journal page, the recap and the card. The session's name keeps its start date. Durations and session windows use timestamps only. Setting *Dates on the timeline* (Advanced, on).
+- Stored session version 2. Events without a usable time (older data) get the start date plus their clock reading, rolling to the next day when the clock goes backwards; the first GM load rewrites ended sessions once.
+- NPCs met scans also run when a token changes on a non-active scene (feature `npcsMet`).
+
+### Live test checklist (Untested in Foundry)
+
+Unit tests (138, passing in UTC, New York and Tokyo time zones) cover the time model (ISO round trip, zones, DST gaps and repeats, range text, midnight crossing, clock parsing, the migration incl. a roll across a DST change, windows, break due), timeline dates and separators (page and window), NPCs met / remove, attendance and GM edits, awards and totals, the extras block (XP only in a secret block, stripped from the recap), gained (window, undone entries, hidden quests, loot fallback), the Previously rules and card, the new views, settings, features and request schemas. Check in a live v14 world (dnd5e 6.x) with Wayfarer's Toolkit, one GM and two players:
+
+**Dates and midnight**
+- [ ] Start a session, change the computer clock or wait past midnight (or load a world with an old session): new lines after midnight show *Sun 15 Mar 12:10 AM*, a day separator appears in the window's timeline and a day heading on the journal page; the Session page and Past sessions show the full span.
+- [ ] A second GM in another time zone sees times and day changes in their own zone in the window.
+- [ ] An ended 0.5.0 session: after the first GM load its flag is version 2, every event has `at`, lines past midnight are on the next day.
+- [ ] Share as recap: the recap's first line has the date span.
+
+**Previously on…**
+- [ ] Share a recap, start the next session: each player sees the card once (reload: not again). Show to players: shown again. Preview: only the GM sees it, players see nothing.
+- [ ] A player without access to the recap (ownership changed) sees nothing. No secret block text appears.
+- [ ] Feature off (reload): no buttons, no card.
+
+**NPCs met**
+- [ ] Place an NPC token on the active scene: one Met line, listed in the NPCs met panel with scene and time. A hidden token: not listed until revealed. A player pulled to another scene with NPCs: those are met too.
+- [ ] Take one out: gone from the panel and the Met line; moving the token doesn't add it back. The recap lists the rest.
+
+**Timer and break reminder**
+- [ ] The Played tile and banner count up without re-rendering. Break reminder on, every 15 minutes: one GM-only notification per interval (players see none); a sleeping tab shows one, not several.
+
+**Attendance and experience**
+- [ ] Players online at start are listed; a player connecting later is added; taking one out sticks. Add someone back by hand.
+- [ ] XP mode: enter XP, Save: Past sessions shows the total and Totals per character adds up across sessions; the recap has no XP. Milestone mode: the text shows in the recap.
+
+**Gained this session**
+- [ ] With the toolkit's coin log on: pay a quest reward and a room during the session; end it: the block shows the net coin and what was spent, and the quest's reward items. An undone entry isn't counted. Without the toolkit: coin from the log's own loot lines.
+
+
 ## 0.5.0 (unreleased)
 
 Five new features, each with its own switch on the Features page (four on by default, Discord posts off).

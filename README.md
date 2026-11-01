@@ -7,6 +7,7 @@ A Foundry VTT module (v13 and v14, any game system, extra support for dnd5e) tha
 - **Scene check**: a read-only audit of your scenes before the players see them, scene list on the left, findings on the right.
 - **Session Start**: pick the scene, activate it, unpause and start the log in one step.
 - **Who's online**: a small panel on Hub scenes that says when everyone's here; it can be moved and folded.
+- **0.6.0**: a *Previously on…* title card for players at Session Start, NPCs met (with remove), a session timer and optional break reminder, attendance with experience or milestones (totals per character), *Gained this session* coin and items, and full dates on every log line, so sessions that run past midnight read correctly.
 - **0.5.0**: quest progress and journeys from Wayfarer's Toolkit in the log and the recap, a prep list on the board fed by the scene check, a *Next session* date, an *Open Red Book* key binding, and optional Discord posts (off by default).
 
 Every tool can be turned off. A turned-off tool registers nothing. With **Wanderer's Satchel** installed, Red Book also shows up in its hub (control panel, health check, debug logging).
@@ -43,6 +44,11 @@ Every tool can be turned off. A turned-off tool registers nothing. With **Wander
 | Prep list from the scene check | `prepList` | (0.5.0; needs the board and the scene check) *Add to the next-session board* on each failed finding and *Add all failures*: a to-do list on the board, grouped by scene, deduped, linking back to the scene. |
 | Open Red Book key binding | `openKey` | (0.5.0) A GM key binding that opens the Red Book window. No key is set until you pick one in Configure Controls. |
 | Discord posts | `discord` | (0.5.0; **off by default**) Posts to a Discord channel through a webhook: a summary when a session ends, the recap when you share it (optional), the next session's date when you set it. See [Discord posts](#discord-posts). |
+| "Previously on…" card | `previously` | (0.6.0; needs the session log) When a session starts (setting *Show "Previously on…" when a session starts*), and when you click **Show to players** on the Session page, players see the last recap you shared as a title card they dismiss. Each browser remembers which recap it has seen; **Preview** shows it to you only. Only the shared recap (player copy) is shown. |
+| NPCs met this session | `npcsMet` | (0.6.0; needs the session log) Non-player tokens that appear on the active scene, or on a scene a connected player is viewing, while a session runs are recorded once each (actor id, name, first seen, scene): **Met** lines on the timeline, an *NPCs met* panel on the Session page and an *NPCs met* list in the recap. Hidden tokens count once revealed. Take one out (a hidden ambusher) with its remove button: it leaves the list and the Met line, and isn't added again that session. |
+| Session timer and break reminder | `sessionTimer` | (0.6.0; needs the session log) Elapsed time (hours:minutes, from the start timestamp) on the Session page's *Played* tile and live banner. *Remind me to take a break* (off by default) shows a GM-only notification every *N* minutes (default 90). |
+| Attendance and experience | `attendance` | (0.6.0; needs the session log) Who was at the table each session (connected players and their characters, added automatically; add or take out by hand) and, by the *Track per session* setting, experience points per character (GM only) or a milestone line (players see it in the recap), or neither. Past sessions shows them per session and totals per character. |
+| Gained this session | `gained` | (0.6.0; needs the session log) A *Gained this session* block in the log and the recap: the party's net coin (g/s/c, with what was spent) from Wayfarer's Toolkit's coin log within the session's start and end times, or from the log's own item and coin lines when the coin log isn't there, plus reward items of quests completed this session (hidden quests left out). Frozen when the session ends. |
 | Scene readiness check | `sceneCheck` | A read-only audit of a scene, a folder or every scene: missing images and sounds, walls and doors, lights, token vision and links, NPC stats, map notes, linked journals, active tile actions and player characters. Each finding has a button that opens the thing to fix. GM only. |
 
 Optional: with **Wayfarer's Toolkit** active, its quests feed the board and its quests, objectives, travel, flights and loot rolls are logged too (its map pins are left out of the scene check). With **Monk's Active Tiles** active, tile actions that point at deleted documents are reported.
@@ -70,11 +76,12 @@ Optional: with **Wayfarer's Toolkit** active, its quests feed the board and its 
   - items and coin gained or lost on player-owned characters and party (group) actors; a burst of changes (a shop trip, a loot split) becomes one line per actor;
   - world time advanced (small steps such as combat rounds add up until they reach the setting's minimum);
   - journals and pages shown to players;
-  - NPCs met: non-player actors with a visible token on the active scene while a player is connected, once per session;
+  - NPCs met: non-player actors with a visible token on the active scene (0.6.0, feature `npcsMet`: or a scene a connected player is viewing) while a player is connected, once per session;
   - level-ups (dnd5e: total level; other systems: `system.details.level` when present);
   - Wayfarer's Toolkit: quests given, completed, failed, reopened, objectives ticked, flights and hex travel (from its Travel Log page), finished loot rolls.
 - **End session** adds a **summary** at the top: how long you played and how much in-world time passed, counts per kind, notable moments (kills, level-ups, quests, combats) and open threads (GM-only threads in a secret block).
 - **Quest events and journeys (0.5.0)**: with the toolkit, quest lines and Travel lines come from its quest journals and its hooks (see [Integrations](#integrations)); each change is logged once. Quest lines get their own *Quests* list in the summary, so they show in the recap (except GM-only ones). The timeline has *Quests* and *Travel* filter chips.
+- **Dates and times (0.6.0)**: every line stores its full time (`t` in ms and `at`, an ISO 8601 UTC string). The Red Book window shows each line's time in **your own time zone**, with the date in front of lines from a later day than the session's start and a day separator where the timeline crosses midnight. The session's span reads *Sat 14 Mar, 7:00 PM – Sun 15 Mar, 1:30 AM* on the Session page, Past sessions, the journal page and the recap. The session's name and number keep the start date. Durations and "this session" windows (time played, gained this session, the break reminder) come from timestamps, so they stay right across midnight and daylight-saving changes. The journal page is written by the recording GM's browser, in that GM's time zone. Lines logged before 0.6.0 get a full time on the first GM load: the session's start date plus the line's clock reading, moving to the next day whenever the clock goes backwards. Turn the dates off with *Dates on the timeline* (Advanced).
 - **Share as recap** (journal header menu on a session log, or the Red Book window's Past sessions page): shows every list line of the session's pages with a tick box. Untick what players shouldn't see. Red Book then creates or updates a separate journal **Recap: <session name>** in the *Session Recaps* folder that players can observe. Secret blocks, GM-only notes, HTML comments and document links are always left out. The GM log itself is never made visible.
 
 ## Next-session board
@@ -173,12 +180,15 @@ The window and every GM tool are GM only. It follows Foundry's light and dark th
 
 Exactly one client records and writes: the active GM user's earliest-opened tab. GM tabs find each other over the module socket and ping every two seconds; closing the recording tab hands over at once, a crashed one after two missed pings. Notes typed in another tab, and rests or journal shows on other clients, are sent to the recording tab with a request id so nothing is logged twice. The recording tab checks each request: its shape, a per-user rate limit, and who sent it (as Foundry reports it). For example, a rest is logged only from a user who owns that character. Hooks broadcast to other clients are accepted only from the GM's recording tab, and they carry ids, never the log's text.
 
+Red Book also reads (0.6.0, feature `gained`, GM clients only, read-only) the toolkit's coin log through `game.modules.get("wayfarers-toolkit").api.coinLog.entries()` when it's there: entries `{ at, actorName, delta, reason, undoneAt, undoOf }` within the session's start and end times; undone entries and undo entries are skipped. Anything missing or unexpected means "no coin log" and the session's own coin lines are used instead.
+
 ## Data Red Book writes, and removing it
 
 - Journal entries: session logs (`flags.red-book.session`, versioned, at most 1000 events and 500 NPCs met per session), recaps (`flags.red-book.recap`), the *Scene check* report journal (`flags.red-book.reports`). Folders it made carry `flags.red-book.folder`.
 - Scenes: the scene check's ignored findings (`flags.red-book.ignoredChecks`: `{ v, entries: [{ key, at, by, name }] }`, at most 500 per scene). Remove Red Book data's *flags* category removes them too.
 - A GM-only journal *Red Book data (GM only)* (`flags.red-book.store`: `{ v, pins, migrated, todos }`; ownership None), holding the board's pins (versioned, at most 50) and, from 0.5.0, the prep list (at most 100 items). Before 0.3.0 the pins were in the world setting `boardPins`; the GM's first load moves them and empties the setting.
 - Scenes: the Hub scene tick (`flags.red-book.hubScene`).
+- 0.6.0: session logs also hold `npcs` (at most 500), `attendance` (at most 50), `awards` (`{ xp: [{ actorId, name, n }], milestone }`) and, once ended, `gained`; each event has `at`. Stored version 2 (older entries are read and rewritten once by the first GM load). One more client setting per browser: `previouslySeen` (the last *Previously on…* card seen).
 - World settings under `red-book.*`, including the open session id, `nextSession` (0.5.0: `{ v, at }`, the board's next-session date), the Discord webhook URL and options (0.5.0; readable by players, see [Discord posts](#discord-posts)) and `migrations` (what the one-time carry-over from the toolkit has done). Two client settings per browser: `onlineHudPos` (where you dragged the Who's online panel) and `onlineHudCollapsed` (whether you folded it). Scene-check results shown in the window are kept in that browser tab's memory only, until reload.
 - **Remove Red Book data** (Module Settings, or the Red Book window's Data page) shows a dry run with counts and names, then removes only the ticked categories after you type REMOVE.
 
@@ -194,6 +204,8 @@ Exactly one client records and writes: the active GM user's earliest-opened tab.
 | `board.open()`, `board.pins()`, `board.pin(uuid)`, `board.unpin(uuid)`, `board.model()`, `board.refresh()`, `board.todos()` (0.5.0: the prep list), `board.doneTodo(id)` (0.5.0) | experimental |
 | `discord.post({ title, text, footer })`, `discord.test()` (0.5.0, GM only; undefined while Discord posts are off) | experimental |
 | `nextSession()` (0.5.0: the next session's date in ms, 0 when not set; everyone) | experimental |
+| `session.edit(sessionId, op)` (0.6.0: `{ op: "unmeet", key }`, `{ op: "attend", userId, present, name?, characterId?, characterName? }`, `{ op: "award", actorId, name?, n }`, `{ op: "milestone", text }`), `session.totals()` (0.6.0: `{ [actorId]: { name, xp, milestones, sessions } }`) | experimental |
+| `previously.preview()`, `previously.show()` (0.6.0, GM only; undefined while the card is off) | experimental |
 | `sceneCheck.run({ scenes, folder, all })`, `sceneCheck.chooser()`, `sceneCheck.checkOne(scene)`, `sceneCheck.exportReport(results)`, `sceneCheck.facts(scene)`, `sceneCheck.rules`, `sceneCheck.clearCache()`, `sceneCheck.ignored(scene)`, `sceneCheck.ignore(scene, key)`, `sceneCheck.unignore(scene, key)`, `sceneCheck.clearIgnored(scene)`, `sceneCheck.clearAllIgnored({ confirm })`, `sceneCheck.results()` (0.4.0: last result per scene this load), `sceneCheck.open(sceneId)` (0.4.0) (GM only: for other users every member warns "GM only" and returns undefined) | experimental |
 | `sessionStart.open()` (GM) | experimental |
 | `online.read()`, `online.open()`, `online.refresh()`, `online.resetPosition()`, `online.toggleCollapsed(value?)` (0.4.0; this browser), `online.isHub(scene)`, `online.hooks`, `online.legacyHooks` (everyone) | experimental |
@@ -212,6 +224,7 @@ Hooks (fired with `Hooks.callAll` on every client):
 | `red-book.allPlayersOnline` | same as above (when everyone who counts is here) | experimental |
 | `wayfarers-toolkit.playerCountChanged`, `wayfarers-toolkit.allPlayersOnline` | same payloads; fired for old world scripts unless the toolkit provides them or the setting is off | experimental (compatibility) |
 | `red-book.leaderChanged` | `{ leader }` (this client only) | experimental |
+| `red-book.previouslyOn` | `{ recap, force }` (0.6.0: a recap journal id; each client that can observe it shows the card) | experimental |
 
 ## License
 
