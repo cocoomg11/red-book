@@ -7,10 +7,12 @@
  */
 import { ID, HOOKS, TOOLKIT_ID, esc } from "./const.mjs";
 import * as M from "./session-model.mjs";
+import { rangeText } from "./time-model.mjs";
 import { F, L, get, set, log, warn } from "./core.mjs";
 import { offGroups } from "./settings-model.mjs";
 import * as UI from "./ui.mjs";
 import { gateApi } from "./check-model.mjs";
+import { t } from "./i18n.mjs";
 
 const TK = TOOLKIT_ID;
 const hasProp = (o, p) => foundry.utils.hasProperty(o, p);
@@ -69,7 +71,7 @@ export async function flush() {
     try {
       await entry.update({ [`flags.${ID}.session`]: data });
       const page = timelinePage(entry);
-      const html = M.pageHTML(data);
+      const html = M.pageHTML(data, pageOpts(data));
       if (page) await page.update({ "text.content": html });
       else await entry.createEmbeddedDocuments("JournalEntryPage", [{ name: "Timeline", type: "text", text: { content: html }, flags: { [ID]: { timeline: true } } }]);
     } catch (e) { warn("session log not saved", e); R.dirty = true; }
@@ -136,23 +138,32 @@ const travelLogPage = () => {
   const j = name ? game.journal.getName(name) : null; return j?.pages.getName("Travel Log") ?? null;
 };
 
-/** NPCs met: non-player actors with a (visible) token on the active scene while a player is connected. */
+/**
+ * NPCs met: non-player actors with a (visible) token on the active scene while a player is connected. 0.6.0 (feature npcsMet): also
+ * the scenes connected players are viewing, and each NPC is kept in the session's `npcs` list (actor id, name, first seen, scene),
+ * which the GM can take one out of. Hidden tokens count once revealed (unless "Count hidden tokens as met" is on).
+ */
 function scanNPCs() {
   if (!recording()) return;
-  const scene = game.scenes.active; if (!scene) return;
-  if (!game.users.some(u => u.active && !u.isGM)) return;
+  const players = game.users.filter(u => u.active && !u.isGM);
+  if (!players.length) return;
+  const scenes = new Map();
+  if (game.scenes.active) scenes.set(game.scenes.active.id, game.scenes.active);
+  if (F.on("npcsMet")) for (const u of players) { const v = u.viewedScene ? game.scenes.get(u.viewedScene) : null; if (v) scenes.set(v.id, v); }
+  if (!scenes.size) return;
   const hidden = !!get("npcHidden");
   const cands = [];
-  for (const t of scene.tokens) {
-    const a = t.actor; if (!a || a.hasPlayerOwner || ["character", "group", "vehicle"].includes(a.type)) continue;
-    if (t.hidden && !hidden) continue;
-    const base = t.actorLink ? a.id : (t.actorId ?? a.id);
-    cands.push({ key: t.actorLink ? base : `${base}:${t.name}`, name: t.name || a.name, uuid: t.actorLink ? a.uuid : t.uuid });
+  for (const scene of scenes.values()) for (const tk of scene.tokens) {
+    const a = tk.actor; if (!a || a.hasPlayerOwner || ["character", "group", "vehicle"].includes(a.type)) continue;
+    if (tk.hidden && !hidden) continue;
+    const base = tk.actorLink ? a.id : (tk.actorId ?? a.id);
+    cands.push({ key: tk.actorLink ? base : `${base}:${tk.name}`, actorId: String(tk.actorId ?? a.id ?? ""), name: tk.name || a.name, uuid: tk.actorLink ? a.uuid : tk.uuid, sceneId: scene.id, sceneName: scene.name });
   }
-  const { fresh, met } = M.meet(R.data.met, cands);
+  const { fresh, session } = F.on("npcsMet") ? M.meetNpcs(R.data, cands, Date.now()) : (() => { const r = M.meet(R.data.met, cands); return { fresh: r.fresh, session: { ...R.data, met: r.met } }; })();
   if (!fresh.length) return;
-  R.data = { ...R.data, met };
-  record("npc", M.metText(fresh.map(c => c.name)), { refs: fresh.map(c => c.uuid).slice(0, 20) });
+  R.data = session;
+  const names = fresh.map(c => c.name);
+  record("npc", M.metText(names), { refs: fresh.map(c => c.uuid).slice(0, 20), data: { npcs: fresh.map(c => c.key), names } });
 }
 function scanSoon() { clearTimeout(R.npcTimer); R.npcTimer = setTimeout(scanNPCs, 1500); }
 
@@ -167,16 +178,19 @@ async function doStart(by) {
   const entry = await JournalEntry.create({
     name, folder: f?.id, ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE }, flags: { [ID]: { session: data } },
     pages: [
-      { name: "Timeline", type: "text", sort: 100, text: { content: M.pageHTML(data) }, flags: { [ID]: { timeline: true } } },
+      { name: "Timeline", type: "text", sort: 100, text: { content: M.pageHTML(data, pageOpts(data)) }, flags: { [ID]: { timeline: true } } },
       { name: "Notes", type: "text", sort: 200, text: { content: "<p>Your own notes for this session. Put anything players shouldn't see in a secret block.</p>" } }
     ]
   });
   await set("openSession", entry.id);
   load(entry);
   record("session", `Session started${by ? ` by ${by.name}` : ""}${game.scenes.active ? ` on ${game.scenes.active.name}` : ""}.`, { refs: game.scenes.active ? [game.scenes.active.uuid] : [] });
+  takeAttendance();
   await flush();
   L.broadcastHook(HOOKS.sessionStarted, { session: entry.id, uuid: entry.uuid, n, name });
   scanSoon();
+  // 0.6.0: "Previously on…" for the players (ids only; each client reads the recap journal it can see).
+  if (F.on("previously") && get("previouslyAuto") !== false) { const r = lastRecap(entry.id); if (r) L.broadcastHook(HOOKS.previouslyOn, { recap: r.id, force: false }); }
   return entry;
 }
 
@@ -188,6 +202,8 @@ async function doEnd(by) {
   record("session", `Session ended${by ? ` by ${by.name}` : ""}.`);
   const ended = { ...R.data, open: false, endedAt: Date.now(), endWorld: game.time.worldTime };
   ended.summary = M.summarize(ended);
+  // 0.6.0: what was gained is frozen at the end (the toolkit's coin log is capped and can be undone later).
+  if (F.on("gained")) ended.gained = gainedNow(ended);
   R.data = ended; R.dirty = true;
   await flush();
   const entry = R.entry;
@@ -207,6 +223,85 @@ function load(entry) {
   log("session loaded on the leader", entry.name);
 }
 function unload() { R.entry = null; R.data = null; R.coalescer = null; clearTimeout(R.coalesceTimer); clearTimeout(R.npcTimer); }
+
+// ---------------------------------------------------------------- 0.6.0: attendance, edits, gained, the page's extra blocks
+/** Plain users for attendance (connected players and their characters). */
+const userRows = () => game.users.map(u => ({ id: u.id, name: u.name, active: !!u.active, isGM: !!u.isGM, character: u.character ? { id: u.character.id, name: u.character.name } : null }));
+/** Leader: adds the connected players to the open session's attendance (feature attendance). */
+function takeAttendance() {
+  if (!recording() || !F.on("attendance")) return;
+  const before = R.data.attendance ?? [];
+  const after = M.addAttendance(before, userRows());
+  if (after.length !== before.length) { R.data = { ...R.data, attendance: after }; schedule(); }
+}
+
+/** The toolkit's coin log entries (GM: its API; anything unexpected = none). */
+function coinLog() {
+  try { const api = game.modules.get(TK)?.active ? game.modules.get(TK)?.api : null; const e = api?.coinLog?.entries?.(); return Array.isArray(e) ? e : null; } catch { return null; }
+}
+/** The toolkit's coin values ({ gp, sp, cp } in its smallest coin), defaults when it doesn't say. */
+function coinValues() {
+  try { const c = game.modules.get(TK)?.api?.coins?.(); if (Array.isArray(c)) return Object.fromEntries(c); } catch { }
+  return {};
+}
+/** Reward items of quests completed this session (not hidden), read from the toolkit's quest data. */
+function questRewards(data) {
+  const out = [];
+  for (const e of data.events) {
+    if (e.type !== "quest" || e.private || e.data?.status !== "completed" || !e.data?.quest) continue;
+    const q = questData(game.journal.get(e.data.quest)); if (!q || q.hidden) continue;
+    out.push({ name: e.text, hidden: !!q.hidden, items: (Array.isArray(q.rewards?.items) ? q.rewards.items : []).map(i => ({ name: i?.name, qty: i?.quantity ?? 1 })) });
+  }
+  return out;
+}
+/** The "Gained this session" data for a session (coin log in its window, or its own loot lines without one). */
+function gainedNow(data) {
+  const log = coinLog();
+  return M.gained({ coinLog: log ?? M.coinFromLoot(data.events), start: data.startedAt, end: data.open ? 0 : data.endedAt, quests: questRewards(data), values: log ? coinValues() : {} });
+}
+/** Labels for the extra blocks, from lang/en.json. */
+const extraLabels = () => Object.fromEntries(Object.keys(M.EXTRA_LABELS).map(k => [k, t(`Extras.${k}`)]));
+/** pageHTML options: dates (setting), the extra blocks (features on). Written by the recording GM's browser, in its time zone. */
+function pageOpts(data) {
+  const mode = String(get("awardMode") ?? "xp");
+  const gained = F.on("gained") ? (data.open ? gainedNow(data) : data.gained) : null;
+  const extras = M.extrasHTML({
+    npcs: F.on("npcsMet") ? data.npcs : null, attendance: F.on("attendance") ? data.attendance : null,
+    awards: F.on("attendance") && mode !== "off" ? data.awards : null, mode, gained, start: data.startedAt, dates: get("logDates") !== false
+  }, extraLabels());
+  return { dates: get("logDates") !== false, extras };
+}
+
+/** Leader: one GM edit to a session (open: the in-memory copy; ended: its journal directly). */
+async function doEdit(d) {
+  const op = { ...d };
+  if (R.entry?.id === d.session && R.data) { R.data = M.applyEdit(R.data, op); schedule(); return; }
+  const j = game.journal.get(d.session); if (!j || !isSessionEntry(j)) return;
+  const data = M.applyEdit(dataOf(j), op);
+  try {
+    await j.update({ [`flags.${ID}.session`]: data });
+    const page = timelinePage(j); if (page) await page.update({ "text.content": M.pageHTML(data, pageOpts(data)) });
+  } catch (e) { warn("session edit not saved", e); }
+}
+/**
+ * GM: edits a session's NPCs met, attendance or awards (0.6.0; routed to the recording tab). `op`: { op: "unmeet", key } |
+ * { op: "attend", userId, present, name?, characterId?, characterName? } | { op: "award", actorId, name?, n } | { op: "milestone", text }.
+ */
+export function edit(sessionId, op = {}) {
+  if (!UI.gmOnly()) return false;
+  const clean = Object.fromEntries(Object.entries({ session: String(sessionId ?? ""), ...op }).filter(([, v]) => v !== undefined && v !== null));
+  return L.request("sessionEdit", clean);
+}
+
+/** Totals per character (session-model awardTotals). */
+export const awardTotals = list => M.awardTotals(list);
+/** The latest shared recap (a recap journal players can observe), skipping `skip` (a session id). */
+export function lastRecap(skip = "") {
+  const order = new Map(sessions().map(j => [j.id, dataOf(j).n]));
+  const list = game.journal.filter(j => !!j.flags?.[ID]?.recap && j.flags[ID].recap.session !== skip && (game.user?.isGM ? Number(j.ownership?.default ?? 0) >= CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER : j.testUserPermission?.(game.user, "OBSERVER")));
+  list.sort((a, b) => (order.get(a.flags[ID].recap.session) ?? 0) - (order.get(b.flags[ID].recap.session) ?? 0) || (Number(a._stats?.modifiedTime) || 0) - (Number(b._stats?.modifiedTime) || 0));
+  return list[list.length - 1] ?? null;
+}
 
 // ---------------------------------------------------------------- public (any client: routed to the leader)
 export function start() { if (!UI.gmOnly()) return false; return L.request("start"); }
@@ -245,7 +340,8 @@ export async function shareRecap(ref) {
   const f = await UI.form(`Share as recap: ${entry.name}`, `<p>Players will see a copy of this session's pages. Secret blocks, GM-only notes and HTML comments are always left out. Untick any line players shouldn't see.</p>${list}`, "Share with players", 560);
   if (!f) return null;
   const drop = lines.filter(l => !f[`keep${l.index}`]).map(l => l.index);
-  const content = M.recapHTML(entry.name, M.stripForRecap(html, drop));
+  const sd = dataOf(entry);
+  const content = M.recapHTML(entry.name, M.stripForRecap(html, drop), get("logDates") !== false ? rangeText(sd.startedAt, sd.open ? 0 : sd.endedAt) : "");
   const name = M.recapName(entry.name);
   let recap = game.journal.find(j => j.flags?.[ID]?.recap?.session === entry.id);
   const folder = await UI.folder(get("recapFolder") || "Session Recaps");
@@ -293,7 +389,7 @@ function onDocHooks() {
   Hooks.on("updateToken", (token, changes) => {
     if (!recording()) return;
     if (hasProp(changes, "delta.system.attributes.hp.value") && token.actor) hpChanged(token.actor, getProp(changes, "delta.system.attributes.hp.value"));
-    if (("hidden" in changes || "actorId" in changes) && token.parent?.active) scanSoon();
+    if (("hidden" in changes || "actorId" in changes) && (token.parent?.active || F.on("npcsMet"))) scanSoon();
   });
   const itemHook = (item, changes) => {
     if (!recording()) return;
@@ -311,8 +407,11 @@ function onDocHooks() {
     const t = R.time.take((Number(get("timeMinMinutes")) || 10) * 60);
     if (t) record("time", `World time advanced ${M.durationText(t.seconds)}.`, { data: t });
   });
-  Hooks.on("createToken", token => { if (recording() && token.parent?.active) scanSoon(); });
-  Hooks.on("userConnected", user => { if (recording() && !user.isGM) scanSoon(); });
+  Hooks.on("createToken", token => { if (recording() && (token.parent?.active || F.on("npcsMet"))) scanSoon(); });
+  Hooks.on("userConnected", (user, connected) => { if (recording() && !user.isGM) { scanSoon(); if (connected !== false) takeAttendance(); } });
+  // 0.6.0: a player moving to another scene (viewedScene) can meet its NPCs.
+  Hooks.on("updateUser", (user, changes) => { if (recording() && !user.isGM && F.on("npcsMet") && changes && "viewedScene" in changes) scanSoon(); });
+  Hooks.on("updateUser", (user, changes) => { if (recording() && !user.isGM && F.on("attendance") && user.active && changes && "character" in changes) takeAttendance(); });
 }
 
 /**
@@ -439,6 +538,12 @@ export function ready() {
     record("note", n.text, { thread: n.thread, private: n.private, data: { by: user.name } });
   });
   L.handle("log", (d, user) => { if (user?.isGM) record(String(d.type), String(d.text ?? ""), { refs: d.refs ?? [], private: !!d.private }); });
+  L.handle("sessionEdit", (d, user) => {
+    if (!user?.isGM) return undefined;
+    if ((d.op === "unmeet" && !F.on("npcsMet")) || ((d.op === "attend" || d.op === "award" || d.op === "milestone") && !F.on("attendance"))) return undefined;
+    return doEdit(d);
+  });
+  if (F.on("previously")) L.handle("previously", (d, user) => { if (user?.isGM && d.recap) L.broadcastHook(HOOKS.previouslyOn, { recap: d.recap, force: !!d.force }); });
   if (F.on("questEvents")) L.handle("quest", (d, user) => { if (user?.isGM) { const p = M.readQuestHook(d); if (p) questChanged(game.journal.get(p.questId), p.change); } });
   if (F.on("journeys")) L.handle("journey", (d, user) => { if (user?.isGM) { const j = M.readJourney(d); if (j) logJourney(j); } });
   L.handle("rest", (d, user) => {
@@ -505,6 +610,10 @@ export function headerControls(app, controls) {
 
 const apiRaw = {
   start, end, note, noteDialog, shareRecap, flush,
+  /** Experimental (0.6.0): edit a session's NPCs met, attendance or awards (see edit()). */
+  edit,
+  /** Experimental (0.6.0): XP, milestones and sessions attended per character across every session. */
+  totals: () => M.awardTotals(sessions().map(dataOf)),
   current: () => { const j = openEntry(); return j ? { id: j.id, uuid: j.uuid, ...dataOf(j) } : null; },
   list: () => sessions().map(j => ({ id: j.id, uuid: j.uuid, name: j.name, n: dataOf(j).n, open: dataOf(j).open })),
   get: ref => { const j = typeof ref === "string" ? game.journal.get(ref) : ref; return j && isSessionEntry(j) ? dataOf(j) : null; },

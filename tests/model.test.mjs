@@ -10,7 +10,7 @@ test("every check rule and log group has a setting; keys unique", () => {
   assert.equal(new Set(keys).size, keys.length);
   for (const r of Object.keys(RULES)) assert.ok(keys.includes(`check-${r}`));
   for (const g of Object.keys(GROUPS)) assert.ok(keys.includes(`log-${g}`));
-  assert.deepEqual(S.RECORDS, ["openSession", "migrations", "onlineHudPos", "onlineHudCollapsed", "boardPins", "nextSession"]);
+  assert.deepEqual(S.RECORDS, ["openSession", "migrations", "onlineHudPos", "onlineHudCollapsed", "boardPins", "nextSession", "previouslySeen"]);
 });
 test("tab rows and conversion", () => {
   const { basic, advanced } = S.tabRows("check");
@@ -47,7 +47,8 @@ test("cleanup plan: only our documents and flags", () => {
 test("feature registry: stable keys, needs nothing from Foundry; Discord off by default", async () => {
   const F = await import("../scripts/features.mjs");
   assert.deepEqual(F.FEATURES.map(f => f.key), ["feature-sessionLog", "feature-prepBoard", "feature-sceneCheck", "feature-sessionStart", "feature-whosOnline",
-    "feature-questEvents", "feature-journeys", "feature-prepList", "feature-openKey", "feature-discord"]);
+    "feature-questEvents", "feature-journeys", "feature-prepList", "feature-openKey", "feature-previously", "feature-npcsMet", "feature-sessionTimer",
+    "feature-attendance", "feature-gained", "feature-discord"]);
   assert.ok(F.FEATURES.every(f => f.hint));
   assert.ok(F.FEATURES.every(f => f.default === (f.id !== "discord")));
 });

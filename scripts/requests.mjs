@@ -38,6 +38,21 @@ export const REQUESTS = defineRequests({
     },
     from: "gm", maxBytes: 2048
   },
+  /**
+   * 0.6.0: a GM's edit to a session (any session, open or ended), applied on the recording tab by session-model applyEdit().
+   * unmeet { key }; attend { userId, present, name?, characterId?, characterName? }; award { actorId, name?, n }; milestone { text }.
+   */
+  sessionEdit: {
+    fields: {
+      session: { type: "id" }, op: { type: "string", oneOf: ["unmeet", "attend", "award", "milestone"] },
+      key: { type: "string", max: 200, optional: true }, userId: { type: "id", optional: true }, present: { type: "boolean", optional: true },
+      name: { type: "string", max: 100, optional: true }, characterId: { type: "string", max: 64, optional: true }, characterName: { type: "string", max: 100, optional: true },
+      actorId: { type: "id", optional: true }, n: { type: "number", int: true, min: 0, max: 10000000, optional: true }, text: { type: "string", max: 500, optional: true }
+    },
+    from: "gm", maxBytes: 2048
+  },
+  /** 0.6.0: show the "Previously on…" card to players (the recap journal's id; `force`: show it again to those who saw it). */
+  previously: { fields: { recap: { type: "id" }, force: { type: "boolean", optional: true } }, from: "gm", maxBytes: 256 },
   /** A rest finished on whichever client took it (players too); the handler checks the sender owns the actor. */
   rest: { fields: { uuid: { type: "uuid" }, long: { type: "boolean" } }, maxBytes: 1024 },
   /** A journal or page shown with Journal.show; the handler checks the sender owns the document. */

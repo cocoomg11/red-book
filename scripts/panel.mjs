@@ -74,7 +74,10 @@ export class RedBookApp extends foundry.applications.api.ApplicationV2 {
     }
     if (p === "past") {
       if (!F.on("sessionLog")) return V.pageHead(t("Nav.past")) + V.offAlert();
-      return V.pastPageHTML(deps.session.sessions().map(j => { const d = deps.session.dataOf(j); return { id: j.id, uuid: j.uuid, name: j.name, n: d.n, open: d.open, events: d.events.length, startedAt: d.startedAt, endedAt: d.endedAt }; }));
+      const all = deps.session.sessions().map(j => ({ j, d: deps.session.dataOf(j) }));
+      const mode = F.on("attendance") ? String(get("awardMode") ?? "xp") : "off";
+      return V.pastPageHTML(all.map(({ j, d }) => ({ id: j.id, uuid: j.uuid, name: j.name, n: d.n, open: d.open, events: d.events.length, startedAt: d.startedAt, endedAt: d.endedAt, attendance: d.attendance, awards: d.awards })),
+        { dates: get("logDates") !== false, mode, totals: F.on("attendance") ? deps.session.awardTotals(all.map(x => x.d)) : null });
     }
     if (p === "features") return V.featuresPageHTML(F.FEATURES, id => F.on(id));
     if (p === "tools") {
@@ -93,13 +96,18 @@ export class RedBookApp extends foundry.applications.api.ApplicationV2 {
     const on = F.on("sessionLog");
     const open = on ? deps.session.openEntry() : null;
     const latest = on && !open ? deps.session.latest() : null;
-    const withUuid = j => (j ? { ...deps.session.dataOf(j), uuid: j.uuid } : null);
+    const withUuid = j => (j ? { ...deps.session.dataOf(j), uuid: j.uuid, id: j.id } : null);
     /** @type {any} */
     let online = null;
     if (F.on("whosOnline")) { const r = deps.online.read(); online = { present: r.present, expected: r.expected }; }
     return V.sessionPageHTML({
       on, session: withUuid(open), last: withUuid(latest), now: Date.now(), filter: this.filter, startOn: F.on("sessionStart"),
-      roster: V.rosterModel(users(), { dnd5e: dnd5e() }), dnd5e: dnd5e(), online
+      roster: V.rosterModel(users(), { dnd5e: dnd5e() }), dnd5e: dnd5e(), online,
+      // 0.6.0
+      dates: get("logDates") !== false, timer: F.on("sessionTimer"),
+      previously: F.on("previously") ? { recap: (() => { const r = deps.session.lastRecap?.(); return r ? { id: r.id, name: r.name } : null; })() } : null,
+      npcs: F.on("npcsMet"),
+      attendance: F.on("attendance") ? { mode: String(get("awardMode") ?? "xp"), players: game.users.filter(u => !u.isGM).map(u => ({ userId: u.id, name: u.name, characterId: u.character?.id ?? "", characterName: u.character?.name ?? "" })) } : null
     });
   }
 
@@ -171,6 +179,17 @@ export class RedBookApp extends foundry.applications.api.ApplicationV2 {
       case "clearNext": await set("nextSession", { v: 1, at: 0 }); return this.render();
       case "postNext": return deps.discord?.postNext(normalizeNext(get("nextSession")).at, { force: true });
       case "discordTest": return deps.discord?.test();
+      // 0.6.0
+      case "prevPreview": return deps.previously?.preview();
+      case "prevShow": return deps.previously?.showPlayers();
+      case "unmeet": { const ok = await UI.confirm(t("Npcs.removeTitle"), `<p>${UI.escText(t("Npcs.removeHint"))}</p>`); if (ok) { S_?.edit(d.session, { op: "unmeet", key: d.key }); this.soon(); } return undefined; }
+      case "attendOff": S_?.edit(d.session, { op: "attend", userId: d.user, present: false }); return this.soon();
+      case "attendOn": {
+        const id = this.element?.querySelector?.("[name=attendPick]")?.value; const u = id ? game.users.get(id) : null; if (!u) return undefined;
+        S_?.edit(d.session, { op: "attend", userId: u.id, present: true, name: u.name, characterId: u.character?.id ?? "", characterName: u.character?.name ?? "" });
+        return this.soon();
+      }
+      case "saveAwards": return this.#saveAwards(d.session);
       case "openOnline": return deps.online?.open();
       case "resetHud": return deps.online?.resetPosition();
       case "cleanup": return deps.cleanup?.open();
@@ -186,6 +205,19 @@ export class RedBookApp extends foundry.applications.api.ApplicationV2 {
     const text = String(el?.value ?? "").trim(); if (!text) return;
     const ok = deps.session?.note(text, { thread: !!f.querySelector("[name=noteThread]")?.checked, private: !!f.querySelector("[name=notePrivate]")?.checked });
     if (ok !== false && el) { el.value = ""; ui.notifications.info(`Red Book: ${t("Session.noteAdded")}`); }
+  }
+
+  /** Saves the XP fields or the milestone text of the session shown (0.6.0). */
+  #saveAwards(session) {
+    const f = this.element; if (!f || !session) return;
+    const ms = f.querySelector("[name=milestone]");
+    if (ms) deps.session?.edit(session, { op: "milestone", text: String(ms.value ?? "").slice(0, 500) });
+    for (const el of f.querySelectorAll("input.rb-xp")) {
+      const n = Math.max(0, Math.floor(Number(el.value) || 0));
+      deps.session?.edit(session, { op: "award", actorId: el.dataset.actor, name: el.dataset.name, n });
+    }
+    ui.notifications.info(`Red Book: ${t("Attend.saved")}`);
+    this.soon();
   }
 
   /** Saves the board's Next session field; posts it to Discord from this GM's browser when that's on. */

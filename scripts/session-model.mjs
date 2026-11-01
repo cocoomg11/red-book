@@ -3,11 +3,15 @@
  * entry; normalizeSession() reads every stored version. Events are plain objects; their times are formatted when they are logged
  * (rtText: real clock, wtText: the world calendar), so rendering needs no clock or calendar.
  *
- * Event: { id, type, t (real ms), wt (world seconds), rtText, wtText, text, refs: [uuid], data: {}, private, thread }
+ * Event: { id, type, t (real ms), at (0.6.0: the same instant, ISO 8601 UTC), wt (world seconds), rtText, wtText, text, refs: [uuid],
+ * data: {}, private, thread }. Rendering shows the time from `t` in the viewer's zone; rtText is the fallback (and the source the
+ * 0.6.0 migration reads a time from when an old event has no usable `t`).
  */
 import { esc, plain, plural } from "./const.mjs";
+import { isoOf, msOf, migrateTimes, dayKey, dayLabel, timeLabel, otherDay, rangeText } from "./time-model.mjs";
 
-export const SESSION_VERSION = 1;
+/** 2 (0.6.0): every event has `at` (ISO, UTC) next to `t`; NPCs met, attendance and awards. */
+export const SESSION_VERSION = 2;
 /** At most this many events are kept per session; notes and threads are never the ones dropped. */
 export const EVENTS_MAX = 1000;
 /** At most this many NPCs are remembered as met per session. */
@@ -48,9 +52,9 @@ const eid = (t) => `${Math.floor(t).toString(36)}${(seq++ % 1296).toString(36).p
 
 /** A clean event. Unknown types become notes. */
 export function makeEvent(e = {}, now = Date.now()) {
-  const t = Number(e.t) || now;
+  const t = msOf(e.t) || msOf(e.at) || now;
   return {
-    id: String(e.id || eid(t)), type: TYPES[e.type] ? e.type : "note", t, wt: Number(e.wt) || 0,
+    id: String(e.id || eid(t)), type: TYPES[e.type] ? e.type : "note", t, at: isoOf(t), wt: Number(e.wt) || 0,
     rtText: String(e.rtText ?? ""), wtText: String(e.wtText ?? ""), text: String(e.text ?? "").slice(0, 2000),
     refs: Array.isArray(e.refs) ? e.refs.filter(r => typeof r === "string").slice(0, 20) : [],
     data: e.data && typeof e.data === "object" ? e.data : {}, private: !!e.private, thread: !!e.thread
@@ -62,15 +66,166 @@ export function makeEvent(e = {}, now = Date.now()) {
 export function normalizeSession(raw = {}) {
   /** @type {any} */
   const s = raw && typeof raw === "object" ? raw : {};
+  let events = (Array.isArray(s.events) ? s.events : []).filter(e => e && typeof e === "object");
+  // 0.6.0: events stored without a usable time get one from the session's start date and their clock reading.
+  if (events.some(e => !msOf(e.t) && !msOf(e.at))) events = migrateTimes(events, Number(s.startedAt) || 0);
   return {
     v: SESSION_VERSION, n: Math.max(1, Math.floor(Number(s.n) || 1)), name: String(s.name ?? ""),
     startedAt: Number(s.startedAt) || 0, endedAt: Number(s.endedAt) || 0, startWorld: Number(s.startWorld) || 0, endWorld: Number(s.endWorld) || 0,
     open: s.open === undefined ? !s.endedAt : !!s.open,
-    events: (Array.isArray(s.events) ? s.events : []).filter(e => e && typeof e === "object").map(e => makeEvent(e)),
+    events: events.map(e => makeEvent(e, Number(s.startedAt) || Date.now())),
     dropped: Math.max(0, Number(s.dropped) || 0),
     met: Array.isArray(s.met) ? [...new Set(s.met.map(String))].slice(-MET_MAX) : [],
     summary: s.summary && typeof s.summary === "object" ? s.summary : null,
-    recap: String(s.recap ?? "")
+    recap: String(s.recap ?? ""),
+    // 0.6.0
+    npcs: normalizeNpcs(s.npcs),
+    attendance: normalizeAttendance(s.attendance),
+    awards: normalizeAwards(s.awards),
+    gained: s.gained && typeof s.gained === "object" ? s.gained : null
+  };
+}
+
+// ---------------------------------------------------------------- 0.6.0: NPCs met, attendance, awards
+/** At most this many people are kept in a session's attendance. */
+export const ATTEND_MAX = 50;
+const str = (v, max = 100) => plain(String(v ?? "")).replace(/\s+/g, " ").trim().slice(0, max);
+/** NPCs met: [{ key, actorId, name, at (ms), sceneId, sceneName }], one per key, oldest first, at most MET_MAX. */
+export function normalizeNpcs(list) {
+  const seen = new Set(); const out = [];
+  for (const n of Array.isArray(list) ? list : []) {
+    if (!n || typeof n !== "object") continue;
+    const key = String(n.key ?? "").slice(0, 200); if (!key || seen.has(key)) continue; seen.add(key);
+    out.push({ key, actorId: String(n.actorId ?? "").slice(0, 64), name: str(n.name) || "?", at: msOf(n.at), sceneId: String(n.sceneId ?? "").slice(0, 64), sceneName: str(n.sceneName) });
+  }
+  return out.slice(-MET_MAX);
+}
+/**
+ * Attendance: [{ userId, name, characterId, characterName, auto, present }], one per user, at most ATTEND_MAX. A row the GM took
+ * out stays with `present: false`, so the automatic add from who's online doesn't put it back.
+ */
+export function normalizeAttendance(list) {
+  const seen = new Set(); const out = [];
+  for (const a of Array.isArray(list) ? list : []) {
+    if (!a || typeof a !== "object") continue;
+    const userId = String(a.userId ?? "").slice(0, 64); if (!userId || seen.has(userId)) continue; seen.add(userId);
+    out.push({ userId, name: str(a.name) || "?", characterId: String(a.characterId ?? "").slice(0, 64), characterName: str(a.characterName), auto: a.auto !== false, present: a.present !== false });
+  }
+  return out.slice(0, ATTEND_MAX);
+}
+/** Awards: { xp: [{ actorId, name, n }], milestone: text }. XP is a whole number ≥ 0 (zero entries dropped). */
+export function normalizeAwards(raw) {
+  const a = raw && typeof raw === "object" ? raw : {};
+  const seen = new Set(); const xp = [];
+  for (const x of Array.isArray(a.xp) ? a.xp : []) {
+    if (!x || typeof x !== "object") continue;
+    const actorId = String(x.actorId ?? "").slice(0, 64); const n = Math.min(1e7, Math.max(0, Math.floor(Number(x.n) || 0)));
+    if (!actorId || !n || seen.has(actorId)) continue; seen.add(actorId);
+    xp.push({ actorId, name: str(x.name) || "?", n });
+  }
+  return { xp: xp.slice(0, ATTEND_MAX), milestone: str(a.milestone, 500) };
+}
+
+/**
+ * Adds NPCs met now (0.6.0). `cands`: [{ key, actorId, name, uuid, sceneId, sceneName }]. Returns { fresh, session } where fresh
+ * are the ones not met before this session (each key once, even after the GM removed it: a removed NPC stays in `met` so the next
+ * scan doesn't add it back).
+ */
+export function meetNpcs(session, cands = [], now = Date.now()) {
+  const { fresh, met } = meet(session.met ?? [], cands);
+  if (!fresh.length) return { fresh, session };
+  const npcs = normalizeNpcs([...(session.npcs ?? []), ...fresh.map(c => ({ ...c, at: now }))]);
+  return { fresh, session: { ...session, met, npcs } };
+}
+/**
+ * Removes one NPC from the met list (the GM's click: a hidden ambusher, a wrong token). Its name goes from the "Met" timeline line
+ * (a line with nobody left goes); the key stays in `met`, so it isn't met again this session. Pure; returns the new session.
+ */
+export function unmeet(session, key) {
+  const k = String(key ?? "");
+  const npc = (session.npcs ?? []).find(n => n.key === k); if (!npc) return session;
+  const npcs = session.npcs.filter(n => n.key !== k);
+  const events = [];
+  for (const e of session.events ?? []) {
+    const keys = Array.isArray(e.data?.npcs) ? e.data.npcs : null;
+    if (e.type !== "npc" || !keys || !keys.includes(k)) { events.push(e); continue; }
+    const i = keys.indexOf(k);
+    const nk = keys.filter(x => x !== k); const names = (e.data.names ?? []).filter((_, j) => j !== i);
+    if (!nk.length) continue;
+    events.push({ ...e, text: metText(names), data: { ...e.data, npcs: nk, names }, refs: e.refs.filter((_, j) => j !== i) });
+  }
+  return { ...session, npcs, events };
+}
+
+/**
+ * Attendance from who's online (0.6.0): adds every connected player (not GMs) not listed yet, with their character. `users`:
+ * [{ id, name, active, isGM, character: { id, name } | null }]. Entries the GM set by hand are kept as they are.
+ */
+/** The rows of an attendance list that count (not taken out by the GM). */
+export const present = (list = []) => (Array.isArray(list) ? list : []).filter(a => a && a.present !== false);
+export function addAttendance(list = [], users = []) {
+  const have = new Set(list.map(a => a.userId)); const out = [...list];
+  for (const u of users) {
+    if (!u?.active || u.isGM || !u.id || have.has(u.id)) continue; have.add(u.id);
+    out.push({ userId: String(u.id), name: String(u.name ?? ""), characterId: String(u.character?.id ?? ""), characterName: String(u.character?.name ?? ""), auto: true });
+  }
+  return normalizeAttendance(out);
+}
+
+/** The award modes (setting "awardMode"). */
+export const AWARD_MODES = Object.freeze({ xp: "Experience points", milestone: "Milestones", off: "Off" });
+/**
+ * Totals per character across sessions (0.6.0): { [actorId]: { name, xp, milestones, sessions } }. `sessions`: normalized sessions.
+ * A milestone counts once for each character present that session. The name is the newest one seen.
+ */
+export function awardTotals(sessions = []) {
+  /** @type {Record<string, { name: string, xp: number, milestones: number, sessions: number }>} */
+  const out = {};
+  const row = (id, name) => (out[id] ??= { name, xp: 0, milestones: 0, sessions: 0 });
+  for (const s of [...sessions].sort((a, b) => (a.n || 0) - (b.n || 0))) {
+    for (const a of present(s.attendance)) if (a.characterId) { const r = row(a.characterId, a.characterName || a.name); r.sessions++; if (a.characterName) r.name = a.characterName; if (s.awards?.milestone) r.milestones++; }
+    for (const x of s.awards?.xp ?? []) { const r = row(x.actorId, x.name); r.xp += x.n; r.name = x.name || r.name; }
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------- 0.6.0: loot and coin gained this session
+/**
+ * The toolkit's coin log entries read defensively (`api.coinLog.entries()`: { at, actor, actorName, delta (smallest coin), reason,
+ * undoneAt, undoOf }). Undone entries and the undo entries themselves are left out. null-safe.
+ */
+export function readCoinLog(entries) {
+  return (Array.isArray(entries) ? entries : []).filter(e => e && typeof e === "object" && !e.undoneAt && !e.undoOf)
+    .map(e => ({ at: msOf(e.at), actorName: str(e.actorName) || "?", delta: Math.round(Number(e.delta) || 0), reason: str(e.reason, 200) }))
+    .filter(e => e.at && e.delta);
+}
+/** An amount in the smallest coin as { gp, sp, cp } (gold 100, silver 10, copper 1 unless `values` says otherwise). */
+export function coinParts(amount, values = {}) {
+  const gpV = values.gp > 0 ? values.gp : 100, spV = values.sp > 0 ? values.sp : 10, cpV = values.cp > 0 ? values.cp : 1;
+  let a = Math.abs(Math.round(Number(amount) || 0));
+  const gp = Math.floor(a / gpV); a -= gp * gpV; const sp = Math.floor(a / spV); a -= sp * spV;
+  return { gp, sp, cp: Math.round(a / cpV) };
+}
+/** "12 g 5 s 3 c" (zero parts left out; "0 c" for nothing). */
+export const coinText = c => ["gp", "sp", "cp"].filter(k => c[k] > 0).map(k => `${c[k]} ${k[0]}`).join(" ") || "0 c";
+/**
+ * The "Gained this session" block's data (0.6.0): coin from the coin log within [start, end] (party totals: gained, spent, net) and
+ * reward items of quests completed this session. `quests`: [{ name, hidden, paid, items: [{ name, qty }] }] for the quests the
+ * session's events say were completed. Hidden quests are left out (the block is player-safe).
+ * @param {{ coinLog?: any[], start?: number, end?: number, quests?: any[], values?: Record<string, number>, now?: number }} [o]
+ */
+export function gained({ coinLog = [], start = 0, end = 0, quests = [], values = {}, now = Date.now() } = {}) {
+  const a = msOf(start), b = msOf(end) || now;
+  let plus = 0, minus = 0;
+  for (const e of readCoinLog(coinLog)) if (a && e.at >= a && e.at <= b) { if (e.delta > 0) plus += e.delta; else minus -= e.delta; }
+  /** @type {Map<string, number>} */ const items = new Map();
+  for (const q of Array.isArray(quests) ? quests : []) {
+    if (!q || q.hidden) continue;
+    for (const i of Array.isArray(q.items) ? q.items : []) { const n = str(i?.name); if (n) items.set(n, (items.get(n) ?? 0) + Math.max(1, Math.floor(Number(i.qty) || 1))); }
+  }
+  return {
+    coin: coinParts(plus, values), spent: coinParts(minus, values), net: plus - minus, netCoin: coinParts(plus - minus, values), netSign: Math.sign(plus - minus),
+    items: [...items].sort((x, y) => x[0].localeCompare(y[0])).map(([name, qty]) => ({ name, qty })), any: !!(plus || minus || items.size)
   };
 }
 
@@ -409,29 +564,122 @@ export function summaryHTML(sum) {
   ].join("");
 }
 
+/**
+ * The time a row shows: the clock reading (rtText, or the time from `t`), with the date in front when it isn't the session's start
+ * date (0.6.0; `dates` off: the clock only).
+ * `stored`: use the clock reading written with the event (rtText) when there is one.
+ * @param {any} e @param {{ start?: number, timeZone?: string, locale?: string, dates?: boolean, stored?: boolean }} [o]
+ */
+export function whenText(e, o = {}) {
+  // The journal page (written once, by the recording GM's browser) keeps the stored reading; windows work it out for the viewer.
+  const clock = (o.stored ? e.rtText : "") || (e.t ? timeLabel(e.t, o) : e.rtText || "");
+  if (o.dates === false || !e.t || !o.start || !otherDay(e.t, o.start, o.timeZone)) return clock;
+  return `${dayLabel(e.t, o)} ${clock}`.trim();
+}
 /** @UUID links for an event's refs are added after the text when it doesn't already name them. */
-function lineHTML(e) {
-  const when = [e.rtText, e.wtText].filter(Boolean).map(esc).join(" · ");
+function lineHTML(e, o = {}) {
+  const when = [whenText(e, o), e.wtText].filter(Boolean).map(esc).join(" · ");
   const tag = e.thread ? ` <strong>[thread]</strong>` : "";
   const links = e.refs.length ? ` ${e.refs.slice(0, 6).map(u => `@UUID[${u}]`).join(" ")}` : "";
   return `${when ? `<span class="rb-when">${when}</span> ` : ""}${esc(e.text)}${tag}${links}`;
 }
 
-/** The session page: header, the summary once ended, then the timeline. Private events go in secret blocks (GM-only in Foundry). */
-export function pageHTML(session) {
+/**
+ * The session page: header (with its date range), the summary once ended, then the timeline. Private events go in secret blocks
+ * (GM-only in Foundry). 0.6.0: a day heading wherever the timeline crosses midnight (in `o.timeZone`: the writing GM's zone), and
+ * the date on rows that aren't on the start date; `o.extras` (trusted HTML: NPCs met, attendance, awards, gained) after the summary.
+ * @param {any} session @param {{ timeZone?: string, locale?: string, dates?: boolean, extras?: string }} [o]
+ */
+export function pageHTML(session, o = {}) {
   const out = [];
-  out.push(`<p class="rb-head"><strong>${esc(session.name)}</strong>${session.open ? " · <em>open: this page is rewritten as events come in; write your own notes on another page</em>" : ""}</p>`);
+  const opts = { ...o, start: session.startedAt, stored: true };
+  const range = session.startedAt && o.dates !== false ? rangeText(session.startedAt, session.open ? 0 : session.endedAt, o) : "";
+  out.push(`<p class="rb-head"><strong>${esc(session.name)}</strong>${range ? ` · ${esc(range)}` : ""}${session.open ? " · <em>open: this page is rewritten as events come in; write your own notes on another page</em>" : ""}</p>`);
   if (!session.open && session.summary) out.push(summaryHTML(session.summary));
+  if (o.extras) out.push(o.extras);
   out.push(`<h2>Timeline</h2>`);
   let list = [];
   const flush = () => { if (list.length) out.push(`<ul class="rb-timeline">${list.join("")}</ul>`); list = []; };
+  let day = session.startedAt ? dayKey(session.startedAt, o.timeZone) : "";
   for (const e of session.events) {
-    if (e.private) { flush(); out.push(`<section class="secret" id="secret-rb-${esc(e.id)}"><p>${lineHTML(e)}</p></section>`); continue; }
-    list.push(`<li>${lineHTML(e)}</li>`);
+    if (o.dates !== false && e.t) {
+      const k = dayKey(e.t, o.timeZone);
+      if (day && k !== day) { flush(); out.push(`<h3 class="rb-day">${esc(dayLabel(e.t, o))}</h3>`); }
+      day = k;
+    }
+    if (e.private) { flush(); out.push(`<section class="secret" id="secret-rb-${esc(e.id)}"><p>${lineHTML(e, opts)}</p></section>`); continue; }
+    list.push(`<li>${lineHTML(e, opts)}</li>`);
   }
   flush();
   if (!session.events.length) out.push(`<p>Nothing logged yet.</p>`);
   return out.join("\n");
+}
+
+// ---------------------------------------------------------------- 0.6.0: the extra blocks on the Timeline page (and so in the recap)
+/** Labels for the extra blocks; session.mjs passes the lang/en.json strings. */
+export const EXTRA_LABELS = Object.freeze({
+  npcs: "NPCs met", attendance: "At the table", xp: "Experience", milestone: "Milestone", gained: "Gained this session",
+  coin: "Coin", spent: "Spent", items: "Items", xpGm: "Experience awarded (GM only)", seen: "first seen"
+});
+/**
+ * The extra blocks (0.6.0), trusted HTML (every value escaped). `m`: { npcs (normalizeNpcs) | null, attendance | null, awards |
+ * null, mode ("xp" | "milestone" | "off"), gained (gained()) | null, timeZone, locale, start }. Player-safe except XP, which goes in a
+ * secret block (players see the milestone text only, never XP numbers). A block whose part is null (feature off) is left out.
+ * @param {any} m @param {Record<string, string>} [L]
+ */
+export function extrasHTML(m = {}, L = EXTRA_LABELS) {
+  const out = [];
+  const o = { timeZone: m.timeZone, locale: m.locale };
+  const here = present(m.attendance ?? []);
+  if (here.length) out.push(`<h3>${esc(L.attendance)}</h3><ul class="rb-attendance">${here.map(a => `<li>${esc(a.characterName || a.name)}${a.characterName && a.name ? ` (${esc(a.name)})` : ""}</li>`).join("")}</ul>`);
+  if (m.awards && m.mode === "milestone" && m.awards.milestone) out.push(`<h3>${esc(L.milestone)}</h3><p class="rb-milestone">${esc(m.awards.milestone)}</p>`);
+  if (m.awards && m.mode === "xp" && m.awards.xp?.length) out.push(`<section class="secret" id="secret-rb-xp"><p><strong>${esc(L.xpGm)}</strong></p><ul>${m.awards.xp.map(x => `<li>${esc(x.name)}: ${x.n} XP</li>`).join("")}</ul></section>`);
+  if (m.npcs?.length) out.push(`<h3>${esc(L.npcs)}</h3><ul class="rb-npcs">${m.npcs.map(n => `<li>${esc(n.name)}${n.sceneName ? ` · ${esc(n.sceneName)}` : ""}${n.at ? ` · ${esc(L.seen)} ${esc(whenText({ t: n.at }, { ...o, start: m.start, dates: m.dates }))}` : ""}</li>`).join("")}</ul>`);
+  const g = m.gained;
+  if (g?.any) {
+    const lines = [];
+    if (g.net) lines.push(`<li>${esc(L.coin)}: ${g.netSign < 0 ? "−" : "+"}${esc(coinText(g.netCoin))}${g.spent && (g.spent.gp || g.spent.sp || g.spent.cp) ? ` (${esc(L.spent)} ${esc(coinText(g.spent))})` : ""}</li>`);
+    for (const i of g.items) lines.push(`<li>${esc(i.name)}${i.qty > 1 ? ` ×${i.qty}` : ""}</li>`);
+    if (lines.length) out.push(`<h3>${esc(L.gained)}</h3><ul class="rb-gained">${lines.join("")}</ul>`);
+  }
+  return out.length ? `<section class="rb-extras">${out.join("")}</section>` : "";
+}
+
+/**
+ * Coin in the session's own loot lines (inventory diffs, data.coin) as coin-log-shaped entries in copper: the fallback when the
+ * toolkit's coin log isn't there (toolkit off, its coin log off, or an older toolkit).
+ */
+export function coinFromLoot(events = []) {
+  const V = { pp: 1000, gp: 100, ep: 50, sp: 10, cp: 1 };
+  const out = [];
+  for (const e of events) {
+    if (e?.type !== "loot" || !e.data?.coin || typeof e.data.coin !== "object") continue;
+    let n = 0; for (const [k, v] of Object.entries(e.data.coin)) n += (V[k] ?? 0) * (Number(v) || 0);
+    if (Math.round(n)) out.push({ id: e.id, at: e.t, actor: "loot", actorName: "", delta: Math.round(n) });
+  }
+  return out;
+}
+
+/**
+ * One GM edit to a session (0.6.0), pure: `op` is a "sessionEdit" request's fields. unmeet { key }; attend { userId, present, name,
+ * characterId, characterName }; award { actorId, name, n }; milestone { text }. Unknown ops return the session unchanged.
+ * @param {any} session @param {any} op
+ */
+export function applyEdit(session, op = {}) {
+  if (op.op === "unmeet") return unmeet(session, op.key);
+  if (op.op === "attend") {
+    const list = session.attendance ?? [];
+    const was = list.find(a => a.userId === op.userId);
+    const row = { ...(was ?? { userId: op.userId, name: op.name ?? "" }), characterId: op.characterId ?? was?.characterId ?? "", characterName: op.characterName ?? was?.characterName ?? "", auto: false, present: !!op.present };
+    return { ...session, attendance: normalizeAttendance(was ? list.map(a => (a.userId === op.userId ? row : a)) : [...list, row]) };
+  }
+  if (op.op === "award") {
+    const xp = (session.awards?.xp ?? []).filter(x => x.actorId !== op.actorId);
+    if (Number(op.n) > 0) xp.push({ actorId: op.actorId, name: op.name, n: op.n });
+    return { ...session, awards: normalizeAwards({ ...(session.awards ?? {}), xp }) };
+  }
+  if (op.op === "milestone") return { ...session, awards: normalizeAwards({ ...(session.awards ?? {}), milestone: op.text }) };
+  return session;
 }
 
 // ---------------------------------------------------------------- recap
@@ -475,8 +723,8 @@ export function joinPages(pages = []) {
   return pages.filter(p => p && String(p.html ?? "").trim()).map(p => `<h2>${esc(p.name)}</h2>\n${p.html}`).join("\n");
 }
 /** The player recap page: a short header and the stripped text. */
-export function recapHTML(sessionName, stripped) {
-  return `<p><em>Recap of ${esc(sessionName)}.</em></p>\n${stripped || "<p>Nothing to share.</p>"}`;
+export function recapHTML(sessionName, stripped, range = "") {
+  return `<p><em>Recap of ${esc(sessionName)}${range ? ` (${esc(range)})` : ""}.</em></p>\n${stripped || "<p>Nothing to share.</p>"}`;
 }
 
 // ---------------------------------------------------------------- hit points and levels (state kept by the recorder)

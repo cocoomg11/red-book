@@ -32,6 +32,7 @@
 .rb-app .rb-tl-panel .rb-chips { padding: 8px 12px; border-bottom: 1px solid var(--wc-line); }
 .rb-app .rb-timeline { max-height: 460px; overflow-y: auto; }
 .rb-app .rb-timeline > li { padding: 5px 12px; }
+.rb-app .rb-timeline > li.rb-day-sep { display: block; padding: 4px 12px; font-size: var(--font-size-11, 11px); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--wc-text-3); border-top: 1px solid var(--wc-line); }
 .rb-app .rb-roster > li { min-height: 40px; }
 .rb-app .rb-face { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; flex: none; border: 1px solid var(--wc-line-strong); }
 .rb-app .rb-face-dot, .rb-online-list .rb-face-dot { display: inline-block; width: 14px; height: 14px; margin: 0 7px; border-radius: 50%; flex: none; border: 1px solid var(--wc-line-strong, rgba(0, 0, 0, .5)); }
@@ -128,3 +129,17 @@ body.theme-light .rb-online-hud { background: rgba(247, 243, 232, .96); box-shad
 .rb-online-list li.extra { font-style: italic; } .rb-online-list li small { color: var(--wc-text-3, inherit); }
 .rb-online-board { padding: 8px; }
 .rb-online-window .rb-online-board { padding: 10px 12px; }
+
+/* 0.6.0: "Previously on…" title card, session clock, NPCs met, attendance */
+.rb-previously .rb-prev { text-align: center; }
+.rb-previously .rb-prev-preview { margin: 0 0 8px; padding: 4px 8px; border-radius: var(--wc-radius-sm); background: var(--wc-warn-bg); color: var(--wc-text); font-size: var(--font-size-12, 12px); }
+.rb-previously .rb-prev-head { padding: 12px 0 10px; border-bottom: 1px solid var(--wc-line); margin-bottom: 10px; }
+.rb-previously .rb-prev-kicker { margin: 0; font-size: var(--font-size-12, 12px); letter-spacing: .2em; text-transform: uppercase; color: var(--wc-text-3); }
+.rb-previously .rb-prev-title { margin: 4px 0 0; border: 0; font-size: 1.8em; }
+.rb-previously .rb-prev-sub { margin: 4px 0 0; color: var(--wc-text-2); }
+.rb-previously .rb-prev-body { text-align: left; max-height: 55vh; overflow-y: auto; }
+.rb-app .rb-clock { white-space: nowrap; font-family: var(--wc-mono); }
+.rb-app .rb-npc-list > li, .rb-app .rb-attend-list > li { display: flex; align-items: center; gap: 6px; }
+.rb-app .rb-xp { width: 5.5em; flex: 0 0 auto; }
+.rb-app .rb-attend-add, .rb-app .rb-milestone-row { margin-top: 6px; }
+.rb-app .rb-milestone-row input { width: 100%; }

@@ -6,7 +6,7 @@
  * Row: { key, tab, advanced, feature, type: "bool" | "text" | "number" | "choice" | "object", default, label, hint, min, max, step, choices, hidden, client }
  */
 import { defineSettings, records, tabRows as coreTabRows, convert as coreConvert } from "../vendor/wanderers-core/index.mjs";
-import { GROUPS } from "./session-model.mjs";
+import { GROUPS, AWARD_MODES } from "./session-model.mjs";
 import { RULES, ruleKey } from "./check-model.mjs";
 import { FEATURE_KEYS } from "./features.mjs";
 import { COUNTS, POSITIONS } from "./online-model.mjs";
@@ -33,6 +33,12 @@ export const SETTINGS = defineSettings([
   row("session", "sessionLog", "coalesceSeconds", "number", 8, "Group item and coin changes (seconds)", "Item and coin changes on one character within this many seconds of each other become one line.", { advanced: true, min: 2, max: 60, step: 1 }),
   row("session", "sessionLog", "timeMinMinutes", "number", 10, "Log world time once it adds up to (minutes)", "Small advances (combat rounds, short waits) are added up and logged once they reach this.", { advanced: true, min: 1, max: 1440, step: 1 }),
   row("session", "sessionLog", "npcHidden", "bool", false, "Count hidden tokens as met", "Off: an NPC is met only once its token is visible on the active scene while a player is connected.", { advanced: true }),
+  // 0.6.0
+  row("session", "sessionLog", "logDates", "bool", true, "Dates on the timeline", "Rows from a later day than the session's start show their date, and a day heading marks midnight (in each viewer's own time zone).", { advanced: true }),
+  row("session", "previously", "previouslyAuto", "bool", true, "Show \"Previously on…\" when a session starts", "Players see the last shared recap as a title card when you start a session. Off: only when you click Show on the Session page."),
+  row("session", "sessionTimer", "breakReminder", "bool", false, "Remind me to take a break", "A GM-only notification every so many minutes while a session runs."),
+  row("session", "sessionTimer", "breakEvery", "number", 90, "Break reminder every (minutes)", "", { min: 15, max: 600, step: 5 }),
+  row("session", "attendance", "awardMode", "choice", "xp", "Track per session", "Experience points (a number per character, GM only), milestones (a line of text players see in the recap), or neither.", { choices: { ...AWARD_MODES } }),
   ...Object.entries(GROUPS).map(([g, label]) => row("session", "sessionLog", `log-${g}`, "bool", true, `Log: ${label}`, "", { advanced: true })),
   row("board", "prepBoard", "boardNext", "number", 3, "Objectives shown per quest", "How many unticked objectives the board lists under each active quest.", { min: 1, max: 10, step: 1 }),
   row("check", "sceneCheck", "checkTimeout", "number", 4, "File check time-out (seconds)", "A file that doesn't answer within this is reported as not checked rather than missing.", { advanced: true, min: 1, max: 30, step: 1 }),
@@ -60,7 +66,9 @@ export const SETTINGS = defineSettings([
   { key: "onlineHudCollapsed", type: "bool", default: false, hidden: true, client: true },
   { key: "boardPins", type: "object", default: { v: 1, pins: [] }, hidden: true },
   // 0.5.0: the next session's date, set on the board (not GM-only: the players may see it).
-  { key: "nextSession", type: "object", default: { v: 1, at: 0 }, hidden: true }
+  { key: "nextSession", type: "object", default: { v: 1, at: 0 }, hidden: true },
+  // 0.6.0: the "Previously on…" recap this browser has seen ({ v: 1, key }: recap id and its last change), per browser.
+  { key: "previouslySeen", type: "object", default: { v: 1, key: "" }, hidden: true, client: true }
 ], { reserved: FEATURE_KEYS });
 
 /** Hidden record settings: never shown and never reset by "Reset tab". */

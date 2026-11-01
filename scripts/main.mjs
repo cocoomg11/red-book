@@ -16,21 +16,26 @@ import * as Start from "./start.mjs";
 import * as Online from "./online.mjs";
 import * as Migrate from "./migrate.mjs";
 import * as Discord from "./discord.mjs";
+import * as Previously from "./previously.mjs";
+import * as Timer from "./timer.mjs";
 import { report } from "./health.mjs";
 import { registration, registerWith, SATCHEL_ID } from "./satchel-model.mjs";
 import { RECORDS } from "./settings-model.mjs";
 
-const deps = { session: Session, board: Board, check: Check, cleanup: Cleanup, online: Online, start: Start, discord: Discord };
+const deps = { session: Session, board: Board, check: Check, cleanup: Cleanup, online: Online, start: Start, discord: Discord, previously: Previously };
 
 /** The Discord API (GM only; players get "GM only" and undefined). */
 const DiscordApi = gateApi({ post: msg => Discord.post(msg ?? {}, { here: true }), test: () => Discord.test() }, () => !!game.user?.isGM, () => ui.notifications.warn("Red Book: GM only."));
+
+/** The "Previously on…" API (GM only). */
+const PreviouslyApi = gateApi(Previously.api, () => !!game.user?.isGM, () => ui.notifications.warn("Red Book: GM only."));
 
 Hooks.once("init", () => {
   F.register();
   S.register();
   game.settings.registerMenu(ID, "panel", { name: "Red Book", label: "Open the control panel", hint: "Health, start/end session, the board, scene checks, every tool's settings and Remove Red Book data.", icon: "fa-solid fa-book", type: Panel.ControlPanel, restricted: true });
   game.settings.registerMenu(ID, "cleanup", { name: "Remove Red Book data", label: "Remove Red Book data", hint: "Dry run first, then removes what Red Book stored in this world.", icon: "fa-solid fa-broom", type: Cleanup.CleanupApp, restricted: true });
-  Panel.init(deps); Board.init(deps); Start.init(deps);
+  Panel.init(deps); Board.init(deps); Start.init(deps); Previously.init(deps); Timer.init(deps);
   if (F.on("sessionLog")) Session.registerKeybinding();
   if (F.on("whosOnline")) Online.init();
   // 0.5.0: Open Red Book (GM). No default key: the GM picks one in Configure Controls.
@@ -62,6 +67,8 @@ Hooks.once("ready", () => {
   if (F.on("sessionLog")) Session.ready();
   if (F.on("prepBoard")) Board.ready();
   if (F.on("discord")) Discord.ready();
+  if (F.on("sessionLog") && F.on("previously")) Previously.ready();
+  if (F.on("sessionLog") && F.on("sessionTimer")) Timer.ready();
   if (F.on("whosOnline")) Migrate.clientPosition().finally(() => Online.ready());
   // One-time GM work on the leader, after the GM tabs have found each other: carry over the toolkit's settings and Hub flags, and
   // move the board pins out of the world setting into the GM-only store.
@@ -76,6 +83,8 @@ Hooks.once("ready", () => {
     get online() { return F.on("whosOnline") ? Online.api : undefined; },
     /** Experimental (0.5.0), GM only: post a message ({ title, text, footer }) or the test message to the Discord webhook. */
     get discord() { return F.on("discord") ? DiscordApi : undefined; },
+    /** Experimental (0.6.0), GM only: preview() the "Previously on…" card here, or show() it to the players. */
+    get previously() { return F.on("sessionLog") && F.on("previously") ? PreviouslyApi : undefined; },
     /** 0.5.0: the next session's date (ms, 0 = not set); readable by everyone (it's a world setting). */
     nextSession: () => normalizeNext(get("nextSession")).at,
     /** GM only: opens the Red Book window, on a page (session, board, check, online, past, features, tools, health, data) or an old tab name. */

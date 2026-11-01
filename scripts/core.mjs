@@ -16,6 +16,6 @@ export const get = S.get;
 export const set = S.set;
 
 /** Hooks the leader may broadcast to every client (core refuses any other name, and other clients accept them only from the leader). */
-export const BROADCAST = [HOOKS.sessionStarted, HOOKS.sessionEnded, HOOKS.eventLogged];
+export const BROADCAST = [HOOKS.sessionStarted, HOOKS.sessionEnded, HOOKS.eventLogged, HOOKS.previouslyOn];
 
 export const L = createLeader({ id: ID, log, requests: REQUESTS, hooks: BROADCAST, leaderHook: HOOKS.leaderChanged });

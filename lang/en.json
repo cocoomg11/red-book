@@ -144,7 +144,15 @@
       "open": "Open journal",
       "recap": "Share as recap",
       "none": "No sessions yet",
-      "noneHint": "Ended sessions are listed here with a link to their journal."
+      "noneHint": "Ended sessions are listed here with a link to their journal.",
+      "when": "When",
+      "here": "At the table",
+      "xp": "XP",
+      "milestone": "Milestone",
+      "milestones": "Milestones",
+      "totals": "Totals per character",
+      "character": "Character",
+      "sessions": "Sessions"
     },
     "Features": {
       "hint": "A tool that's off registers nothing (no hooks, buttons or key bindings). Saving a change reloads the world."
@@ -207,6 +215,51 @@
       "test": "Send test message",
       "testHint": "Posts a short message from this browser to check the webhook.",
       "honor": "Honor system: players can read the webhook URL from the browser console (world settings reach every browser). Use a webhook for one channel only, and delete it in Discord if it leaks."
+    },
+    "Previously": {
+      "title": "Previously on…",
+      "preview": "Preview: only you see this. Players see it when you click Show to players, or when a session starts.",
+      "previewBtn": "Preview",
+      "show": "Show to players",
+      "dismiss": "Got it",
+      "empty": "Nothing to share.",
+      "none": "No recap has been shared with players yet.",
+      "sent": "\"Previously on…\" sent to the players."
+    },
+    "Npcs": {
+      "title": "NPCs met",
+      "none": "Nobody met yet. NPC tokens on the active scene, or a scene a player is viewing, are listed once they're visible.",
+      "remove": "Take {name} out",
+      "removeTitle": "Take out this NPC?",
+      "removeHint": "They leave the NPCs met list and their name leaves the Met line on the timeline. They won't be added again this session."
+    },
+    "Attend": {
+      "title": "At the table this session",
+      "none": "Nobody listed yet. Players who are connected are added automatically.",
+      "add": "Add",
+      "remove": "Take {name} out",
+      "xpFor": "Experience for {name}",
+      "milestone": "Milestone",
+      "milestoneHint": "e.g. Reached level 4 after clearing the mine",
+      "save": "Save",
+      "saved": "Attendance and awards saved.",
+      "xpHint": "Experience numbers are GM only; players see milestone text, never experience."
+    },
+    "Timer": {
+      "elapsed": "Time since the session started",
+      "break": "The session has run {time}. Time for a break?"
+    },
+    "Extras": {
+      "npcs": "NPCs met",
+      "attendance": "At the table",
+      "xp": "Experience",
+      "milestone": "Milestone",
+      "gained": "Gained this session",
+      "coin": "Coin",
+      "spent": "spent",
+      "items": "Items",
+      "xpGm": "Experience awarded (GM only)",
+      "seen": "first seen"
     }
   }
 }

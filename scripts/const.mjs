@@ -11,7 +11,9 @@ export const HOOKS = {
   sessionEnded: `${ID}.sessionEnded`,
   eventLogged: `${ID}.eventLogged`,
   recapShared: `${ID}.recapShared`,
-  leaderChanged: `${ID}.leaderChanged`
+  leaderChanged: `${ID}.leaderChanged`,
+  /** 0.6.0: show the "Previously on…" card ({ recap: journal id }; ids only). */
+  previouslyOn: `${ID}.previouslyOn`
 };
 /** The companion module whose quests, flights, travel and loot rolls the session log can read (optional). */
 export const TOOLKIT_ID = "wayfarers-toolkit";

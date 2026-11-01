@@ -8,7 +8,8 @@
  */
 import { esc, plural } from "./const.mjs";
 import { navItem, statusLine, statusLines, badge, dot, icon, TONES } from "../vendor/wanderers-core/index.mjs";
-import { TYPES, durationText } from "./session-model.mjs";
+import { TYPES, durationText, whenText, present } from "./session-model.mjs";
+import { dayKey, dayLabel, rangeText, clockText, elapsedMs } from "./time-model.mjs";
 import { isFailure, todoId, toLocalInput } from "./board-model.mjs";
 import { groupFindings, tallyText } from "./check-model.mjs";
 import { t } from "./i18n.mjs";
@@ -123,14 +124,31 @@ export function eventTone(type) {
   return "info";
 }
 
-/** Timeline rows (core's wc-timeline). */
-export function timelineHTML(events = []) {
+/**
+ * Timeline rows (core's wc-timeline). 0.6.0: `o.start` (the session's start, ms) shows the date on rows from another day and a day
+ * separator row where the day changes, both in this viewer's time zone (`o.timeZone` undefined = the browser's); times come from
+ * each event's timestamp. Rows may be newest first or oldest first.
+ * @param {any[]} events @param {{ start?: number, timeZone?: string, locale?: string, dates?: boolean }} [o]
+ */
+export function timelineHTML(events = [], o = {}) {
   if (!events.length) return `<p class="wc-hint rb-pad">${esc(t("Session.noEvents"))}</p>`;
-  return `<ol class="wc-timeline rb-timeline">${events.map(e => {
+  const dates = o.dates !== false && !!o.start;
+  let day = "";
+  return `<ol class="wc-timeline rb-timeline">${events.map((e, i) => {
+    let sep = "";
+    if (dates && e.t) {
+      const k = dayKey(e.t, o.timeZone);
+      // A separator names the day of the rows under it: wherever the day changes, and above the first row when that isn't the
+      // session's start date (newest first, past midnight).
+      const changed = i > 0 ? k !== day : k !== dayKey(/** @type {number} */ (o.start), o.timeZone);
+      if (changed) sep = `<li class="rb-day-sep" role="separator"><span>${esc(dayLabel(e.t, o))}</span></li>`;
+      day = k;
+    }
     const tone = eventTone(e.type);
     const ic = TYPES[e.type]?.icon ?? "fa-circle";
     const aside = [e.thread ? badge("accent", t("Session.thread"), { small: true }) : "", e.private ? badge("off", t("Session.gmOnly"), { small: true }) : ""].join("");
-    return `<li class="${e.type === "note" ? "wc-tl-note" : ""}" data-type="${esc(e.type)}"><span class="wc-tl-time"><span>${esc(e.rtText || "")}</span>${e.wtText ? `<span>${esc(e.wtText)}</span>` : ""}</span>`
+    const when = dates ? whenText(e, { ...o, start: o.start }) : e.rtText || "";
+    return `${sep}<li class="${e.type === "note" ? "wc-tl-note" : ""}" data-type="${esc(e.type)}"${e.at ? ` data-at="${esc(e.at)}"` : ""}><span class="wc-tl-time"><span>${esc(when)}</span>${e.wtText ? `<span>${esc(e.wtText)}</span>` : ""}</span>`
       + `<span class="wc-tl-icon wc-${tone}" aria-hidden="true"><i class="fa-solid ${esc(ic)}"></i></span><span class="wc-tl-text"><span class="wc-sr">${esc(TYPES[e.type]?.label ?? e.type)}:</span>${esc(e.text)}</span>`
       + `<span class="wc-tl-aside">${aside}</span></li>`;
   }).join("")}</ol>`;
@@ -196,15 +214,19 @@ const stat = (k, v, sub = "") => `<div class="wc-stat"><p class="wc-stat-k">${es
 export function sessionPageHTML(m) {
   const s = m.session; const shown = s ?? m.last;
   const banner = !m.on ? `<div class="wc-banner wc-off">${icon("off")}<span class="wc-banner-text">${esc(t("Session.logOff"))}</span></div>`
-    : s ? `<div class="wc-banner wc-live rb-live">${dot("live")}<span class="wc-banner-text"><strong>${esc(t("Session.live"))}</strong> · ${esc(s.name)}${s.startedAt ? ` · ${esc(t("Session.since", { time: durationText(Math.max(0, Math.round((m.now - s.startedAt) / 1000))) }))}` : ""}</span>${btn("note", "fa-solid fa-pen", t("Session.noteBox"), { small: true })}${btn("end", "fa-solid fa-book-bookmark", t("Session.end"), { small: true })}</div>`
+    : s ? `<div class="wc-banner wc-live rb-live">${dot("live")}<span class="wc-banner-text"><strong>${esc(t("Session.live"))}</strong> · ${esc(s.name)}${s.startedAt ? (m.timer ? ` · <span class="rb-clock" data-tooltip="${esc(t("Timer.elapsed"))}"><i class="fa-solid fa-stopwatch" aria-hidden="true"></i> <span data-rb-clock="${esc(s.startedAt)}">${esc(clockText(elapsedMs(s.startedAt, m.now)))}</span></span>` : ` · ${esc(t("Session.since", { time: durationText(Math.max(0, Math.round((m.now - s.startedAt) / 1000))) }))}`) : ""}</span>${btn("note", "fa-solid fa-pen", t("Session.noteBox"), { small: true })}${btn("end", "fa-solid fa-book-bookmark", t("Session.end"), { small: true })}</div>`
       : `<div class="wc-banner wc-none">${icon("none")}<span class="wc-banner-text">${esc(t("Session.notLive"))}</span>${btn("startDialog", "fa-solid fa-flag-checkered", t("Session.startDialog"), { small: true, disabled: !m.startOn })}${btn("start", "fa-solid fa-book", t("Session.start"), { small: true, primary: true })}</div>`;
   const ev = shown?.events ?? [];
   const count = type => ev.filter(e => e.type === type).length;
   const played = shown?.startedAt ? durationText(Math.max(0, Math.round(((s ? m.now : shown.endedAt || m.now) - shown.startedAt) / 1000))) : "–";
   const threads = ev.filter(e => e.type === "note" && e.thread).length;
-  const tiles = m.on && shown ? `<p class="wc-section-label">${esc(s ? t("Session.thisSession") : t("Session.lastSession", { name: shown.name }))}</p><div class="wc-stats rb-stats">
+  const range = shown?.startedAt && m.dates !== false ? rangeText(shown.startedAt, s ? 0 : shown.endedAt, { timeZone: m.timeZone, locale: m.locale }) : "";
+  const playedTile = s && m.timer && s.startedAt
+    ? `<div class="wc-stat"><p class="wc-stat-k">${esc(t("Session.statPlayed"))}</p><div class="wc-stat-v wc-mono" data-rb-clock="${esc(s.startedAt)}">${esc(clockText(elapsedMs(s.startedAt, m.now)))}</div></div>`
+    : stat(t("Session.statPlayed"), played);
+  const tiles = m.on && shown ? `<p class="wc-section-label">${esc(s ? t("Session.thisSession") : t("Session.lastSession", { name: shown.name }))}${range ? ` <span class="wc-hint">${esc(range)}</span>` : ""}</p><div class="wc-stats rb-stats">
       ${stat(t("Session.statEvents"), String(ev.length))}
-      ${stat(t("Session.statPlayed"), played)}
+      ${playedTile}
       ${stat(t("Session.statCombats"), String(count("combatStart")), count("down") ? t("Session.downs", { n: count("down") }) : "")}
       ${stat(t("Session.statNotes"), String(count("note")), threads ? t("Session.threads", { n: threads }) : "")}
       ${m.online ? stat(t("Session.statHere"), `${m.online.present}/${m.online.expected}`) : ""}
@@ -218,9 +240,53 @@ export function sessionPageHTML(m) {
   const chips = `<div class="wc-row rb-chips" role="group" aria-label="${esc(t("Session.filterLabel"))}">${Object.keys(FILTERS).map(f => `<button type="button" class="wc-chip" data-action="filter" data-filter="${f}" aria-pressed="${f === m.filter ? "true" : "false"}">${esc(t(`Filter.${f}`))} <span class="wc-hint">${counts[f]}</span></button>`).join("")}</div>`;
   const rows = filterEvents(ev, m.filter, TIMELINE_MAX);
   const more = (Object.hasOwn(FILTERS, m.filter) ? counts[m.filter] : counts.all) > TIMELINE_MAX ? hint(t("Session.more", { n: TIMELINE_MAX })) : "";
-  const timeline = m.on && shown ? panel(t("Session.timeline"), "fa-solid fa-timeline", `${chips}${timelineHTML(rows)}${more}`, { cls: "rb-tl-panel", head: shown.uuid ? iconBtn("openUuid", "fa-solid fa-up-right-from-square", t("Session.openJournal"), { uuid: shown.uuid }) : "" }) : "";
+  const timeline = m.on && shown ? panel(t("Session.timeline"), "fa-solid fa-timeline", `${chips}${timelineHTML(rows, { start: shown.startedAt, timeZone: m.timeZone, locale: m.locale })}${more}`, { cls: "rb-tl-panel", head: shown.uuid ? iconBtn("openUuid", "fa-solid fa-up-right-from-square", t("Session.openJournal"), { uuid: shown.uuid }) : "" }) : "";
   const table = panel(t("Roster.title"), "fa-solid fa-users", rosterHTML(m.roster ?? [], { dnd5e: !!m.dnd5e }), { cls: "rb-roster-panel", head: m.online ? badge(m.online.expected && m.online.present === m.online.expected ? "ok" : "info", `${m.online.present}/${m.online.expected}`, { small: true }) : "" });
-  return `${pageHead(t("Nav.session"))}${banner}${tiles}${note}<div class="wc-cols rb-session-cols"><div class="rb-col-main">${timeline || (m.on ? hint(t("Session.none")) : "")}</div><div class="rb-col-side">${table}</div></div>`;
+  const side = [table, m.on && m.previously ? previouslyPanelHTML(m.previously) : "", m.on && shown && m.npcs ? npcsPanelHTML(shown, { timeZone: m.timeZone, locale: m.locale }) : "",
+    m.on && shown && m.attendance ? attendancePanelHTML(shown, m.attendance) : ""].join("");
+  return `${pageHead(t("Nav.session"))}${banner}${tiles}${note}<div class="wc-cols rb-session-cols"><div class="rb-col-main">${timeline || (m.on ? hint(t("Session.none")) : "")}</div><div class="rb-col-side">${side}</div></div>`;
+}
+
+// ---------------------------------------------------------------- 0.6.0 side panels
+/**
+ * "Previously on…": Preview (this GM only) and Show to players. `p`: { recap: { id, name } | null }.
+ * @param {{ recap?: { id: string, name: string } | null }} p
+ */
+export function previouslyPanelHTML(p) {
+  const body = p?.recap
+    ? `<div class="wc-panel-body"><p class="rb-ellipsis">${esc(p.recap.name)}</p><div class="wc-row">${btn("prevPreview", "fa-solid fa-eye", t("Previously.previewBtn"), { small: true })}${btn("prevShow", "fa-solid fa-clapperboard", t("Previously.show"), { small: true, primary: true })}</div></div>`
+    : `<p class="wc-hint rb-pad">${esc(t("Previously.none"))}</p>`;
+  return panel(t("Previously.title"), "fa-solid fa-clapperboard", body, { cls: "rb-prev-panel" });
+}
+/**
+ * NPCs met in the session shown (open or last): name, scene, first seen; a remove button each.
+ * @param {any} s @param {{ timeZone?: string, locale?: string }} [o]
+ */
+export function npcsPanelHTML(s, o = {}) {
+  const list = Array.isArray(s?.npcs) ? s.npcs : [];
+  const body = list.length ? `<ul class="wc-panel-list rb-npc-list">${[...list].reverse().map(n => `<li><span class="wc-grow rb-who"><strong>${esc(n.name)}</strong> <span class="wc-hint">${esc([n.sceneName, n.at ? whenText({ t: n.at }, { ...o, start: s.startedAt }) : ""].filter(Boolean).join(" · "))}</span></span>${iconBtn("unmeet", "fa-solid fa-user-minus", t("Npcs.remove", { name: n.name }), { session: s.id ?? "", key: n.key })}</li>`).join("")}</ul>`
+    : `<p class="wc-hint rb-pad">${esc(t("Npcs.none"))}</p>`;
+  return panel(t("Npcs.title"), "fa-solid fa-user-group", body, { cls: "rb-npcs-panel", head: list.length ? badge("info", String(list.length), { small: true }) : "" });
+}
+/**
+ * Attendance and awards for the session shown. `a`: { mode ("xp" | "milestone" | "off"), players: [{ userId, name, characterId,
+ * characterName }] (every player user, to add someone by hand) }.
+ * @param {any} s @param {{ mode?: string, players?: any[] }} a
+ */
+export function attendancePanelHTML(s, a = {}) {
+  const here = present(s?.attendance ?? []);
+  const ids = new Set(here.map(x => x.userId));
+  const xp = new Map((s?.awards?.xp ?? []).map(x => [x.actorId, x.n]));
+  const sid = s?.id ?? "";
+  const rows = here.map(x => `<li><span class="wc-grow rb-who"><strong>${esc(x.characterName || x.name)}</strong>${x.characterName ? ` <span class="wc-hint">${esc(x.name)}</span>` : ""}</span>`
+    + `${a.mode === "xp" && x.characterId ? `<label class="wc-sr" for="rb-xp-${esc(x.characterId)}">${esc(t("Attend.xpFor", { name: x.characterName || x.name }))}</label><input type="number" class="rb-xp" id="rb-xp-${esc(x.characterId)}" name="xp-${esc(x.characterId)}" data-actor="${esc(x.characterId)}" data-name="${esc(x.characterName || x.name)}" min="0" step="1" value="${xp.get(x.characterId) ?? ""}" placeholder="XP">` : ""}`
+    + `${iconBtn("attendOff", "fa-solid fa-user-xmark", t("Attend.remove", { name: x.characterName || x.name }), { session: sid, user: x.userId })}</li>`).join("");
+  const missing = (a.players ?? []).filter(p => !ids.has(p.userId));
+  const add = missing.length ? `<div class="wc-row rb-attend-add"><label class="wc-sr" for="rb-attend-pick">${esc(t("Attend.add"))}</label><select id="rb-attend-pick" name="attendPick">${missing.map(p => `<option value="${esc(p.userId)}">${esc(p.characterName || p.name)}</option>`).join("")}</select>${btn("attendOn", "fa-solid fa-user-plus", t("Attend.add"), { small: true, data: { session: sid } })}</div>` : "";
+  const award = a.mode === "milestone" ? `<div class="rb-milestone-row"><label for="rb-milestone">${esc(t("Attend.milestone"))}</label><input type="text" id="rb-milestone" name="milestone" maxlength="500" value="${esc(s?.awards?.milestone ?? "")}" placeholder="${esc(t("Attend.milestoneHint"))}"></div>` : "";
+  const save = a.mode === "xp" || a.mode === "milestone" ? `<div class="wc-row wc-end">${btn("saveAwards", "fa-solid fa-floppy-disk", t("Attend.save"), { small: true, primary: true, data: { session: sid } })}</div>` : "";
+  const body = `<div class="wc-panel-body">${here.length ? `<ul class="wc-panel-list rb-attend-list">${rows}</ul>` : hint(t("Attend.none"))}${add}${award}${save}${a.mode === "xp" ? hint(t("Attend.xpHint")) : ""}</div>`;
+  return panel(t("Attend.title"), "fa-solid fa-clipboard-user", body, { cls: "rb-attend-panel", head: badge("info", String(here.length), { small: true }) });
 }
 
 // ---------------------------------------------------------------- board (three columns)
@@ -398,15 +464,26 @@ export function onlinePageHTML(r, { page = true, hubs = [] } = {}) {
 }
 
 // ---------------------------------------------------------------- past sessions
-/** `list`: [{ id, uuid, name, n, open, events, startedAt, endedAt }] newest first is done here. */
-export function pastPageHTML(list = []) {
+/**
+ * `list`: [{ id, uuid, name, n, open, events, startedAt, endedAt, attendance?, awards? }] (newest first is done here). 0.6.0 `o`:
+ * { dates (show the date range), mode (award mode, or "off" / undefined: no award column), totals (awardTotals(), or null: no totals
+ * table), timeZone, locale }.
+ */
+export function pastPageHTML(list = [], o = {}) {
   const rows = [...list].sort((a, b) => (Number(b.n) || 0) - (Number(a.n) || 0));
-  const body = rows.length ? `<div class="wc-table-box"><table class="wc-table"><thead><tr><th>${esc(t("Past.session"))}</th><th>${esc(t("Past.events"))}</th><th>${esc(t("Past.played"))}</th><th><span class="wc-sr">${esc(t("Past.actions"))}</span></th></tr></thead><tbody>${rows.map(s => `<tr>
+  const awards = o.mode === "xp" || o.mode === "milestone";
+  const att = !!o.totals;
+  const awardCell = s => o.mode === "xp" ? String((s.awards?.xp ?? []).reduce((n, x) => n + x.n, 0) || "–") : esc(s.awards?.milestone || "–");
+  const body = rows.length ? `<div class="wc-table-box"><table class="wc-table"><thead><tr><th>${esc(t("Past.session"))}</th>${o.dates ? `<th>${esc(t("Past.when"))}</th>` : ""}<th>${esc(t("Past.events"))}</th><th>${esc(t("Past.played"))}</th>${att ? `<th>${esc(t("Past.here"))}</th>` : ""}${awards ? `<th>${esc(t(o.mode === "xp" ? "Past.xp" : "Past.milestone"))}</th>` : ""}<th><span class="wc-sr">${esc(t("Past.actions"))}</span></th></tr></thead><tbody>${rows.map(s => `<tr>
       <td><a class="rb-open" data-action="openUuid" data-uuid="${esc(s.uuid)}">${esc(s.name)}</a>${s.open ? ` ${badge("live", t("Session.live"), { small: true, dot: true })}` : ""}</td>
+      ${o.dates ? `<td class="wc-hint">${esc(rangeText(s.startedAt, s.open ? 0 : s.endedAt, { timeZone: o.timeZone, locale: o.locale }))}</td>` : ""}
       <td>${Number(s.events) || 0}</td><td>${s.startedAt && s.endedAt ? esc(durationText(Math.round((s.endedAt - s.startedAt) / 1000))) : "–"}</td>
+      ${att ? `<td>${esc(present(s.attendance ?? []).map(a => a.characterName || a.name).join(", ") || "–")}</td>` : ""}${awards ? `<td>${awardCell(s)}</td>` : ""}
       <td class="rb-right">${iconBtn("openUuid", "fa-solid fa-book-open", t("Past.open"), { uuid: s.uuid })}${iconBtn("recap", "fa-solid fa-share-from-square", t("Past.recap"), { id: s.id })}</td></tr>`).join("")}</tbody></table></div>`
     : `<div class="wc-alert wc-info">${icon("info")}<div class="wc-alert-title">${esc(t("Past.none"))}</div><p>${esc(t("Past.noneHint"))}</p></div>`;
-  return `${pageHead(t("Nav.past"), `<span class="wc-hint">${esc(plural(rows.length, "session"))}</span>`)}${body}`;
+  const tot = att ? Object.entries(o.totals).sort((a, b) => a[1].name.localeCompare(b[1].name)) : [];
+  const totals = tot.length ? panel(t("Past.totals"), "fa-solid fa-trophy", `<div class="wc-table-box"><table class="wc-table"><thead><tr><th>${esc(t("Past.character"))}</th><th>${esc(t("Past.sessions"))}</th>${o.mode === "xp" ? `<th>${esc(t("Past.xp"))}</th>` : ""}${o.mode === "milestone" ? `<th>${esc(t("Past.milestones"))}</th>` : ""}</tr></thead><tbody>${tot.map(([, r]) => `<tr><td>${esc(r.name)}</td><td>${r.sessions}</td>${o.mode === "xp" ? `<td>${r.xp}</td>` : ""}${o.mode === "milestone" ? `<td>${r.milestones}</td>` : ""}</tr>`).join("")}</tbody></table></div>`) : "";
+  return `${pageHead(t("Nav.past"), `<span class="wc-hint">${esc(plural(rows.length, "session"))}</span>`)}${body}${totals}`;
 }
 
 // ---------------------------------------------------------------- settings pages
