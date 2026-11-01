@@ -234,6 +234,6 @@ Hooks (fired with `Hooks.callAll` on every client):
 
 ## Building from source
 
-Red Book bundles [wanderers-core](https://github.com/cocoomg11/wanderers-core) (0.5.0, including its shared window look, the GM-only store, remembered windows and key bindings) in `vendor/wanderers-core/`, pinned in `wanderers-core.lock.json`. Never edit it by hand. Update it with `node vendor/wanderers-core/vendor.mjs update X.Y.Z`; `npm run verify-core` checks it matches the pin.
+Red Book bundles [wanderers-core](https://github.com/cocoomg11/wanderers-core) (0.5.1, including its shared window look, the GM-only store, remembered windows and key bindings) in `vendor/wanderers-core/`, pinned in `wanderers-core.lock.json`. Never edit it by hand. Update it with `node vendor/wanderers-core/vendor.mjs update X.Y.Z`; `npm run verify-core` checks it matches the pin.
 
 `npm test` runs the pure-logic tests with Node's built-in test runner (Node 22); `npm run check` syntax-checks every script; `npm run lint` runs ESLint with core's shared config; `npm run types` runs the JSDoc type check (zero errors). GitHub Actions runs core's shared checks (pin, syntax, lint, types, tests).

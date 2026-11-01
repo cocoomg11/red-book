@@ -23,10 +23,10 @@ before(() => {
 const noMissing = html => assert.ok(!html.includes("MISSING:"), html.match(/MISSING:[\w.]+/)?.[0]);
 
 // ---------------------------------------------------------------- core 0.5.0
-test("core 0.5.0 vendored; CI and the release zip follow it", () => {
-  assert.equal(CORE_VERSION, "0.5.0");
-  assert.equal(JSON.parse(read("wanderers-core.lock.json")).version, "0.5.0");
-  assert.match(read(".github/workflows/test.yml"), /module-checks\.yml@v0\.5\.0/);
+test("core 0.5.1 vendored; CI and the release zip follow it", () => {
+  assert.equal(CORE_VERSION, "0.5.1");
+  assert.equal(JSON.parse(read("wanderers-core.lock.json")).version, "0.5.1");
+  assert.match(read(".github/workflows/test.yml"), /module-checks\.yml@v0\.5\.1/);
   assert.match(read(".github/workflows/release.yml"), /'vendor\/wanderers-core\/testing\/\*'/);
 });
 

@@ -1,10 +1,10 @@
 {
   "name": "wanderers-core",
   "lockVersion": 1,
-  "version": "0.5.0",
-  "hash": "sha256-94dff51bc1307805f3fd433c46db1c26058418731b20e8de9e891c84a146086e",
+  "version": "0.5.1",
+  "hash": "sha256-9ef900e77c74954dbb467786ba8ec6e30908376e156eb3c9954542475000a7c1",
   "source": "release",
   "dir": "vendor/wanderers-core",
   "files": 37,
-  "asset": "https://github.com/cocoomg11/wanderers-core/releases/download/v0.5.0/wanderers-core-0.5.0.json"
+  "asset": "https://github.com/cocoomg11/wanderers-core/releases/download/v0.5.1/wanderers-core-0.5.1.json"
 }

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.1 (2026-11-01)
+
+Moves to **wanderers-core 0.5.1** (patch: every shared "Module data" journal folder is hidden, and duplicates are merged when the store is filed). No Red Book API, setting or data changes.
+
+### Changed
+- wanderers-core 0.5.1 vendored (CI checks `@v0.5.1`).
+
+### Untested in Foundry
+- A world with several Module data folders ends with one after a reload.
+
 ## 0.7.0 (2026-11-01)
 
 Red Book moves from wanderers-core 0.3.1 straight to **0.5.0** and uses its new helpers, plus one fix found in live testing.
