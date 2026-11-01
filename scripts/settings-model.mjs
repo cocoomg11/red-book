@@ -49,6 +49,8 @@ export const SETTINGS = defineSettings([
   { key: "openSession", type: "text", default: "", hidden: true },
   { key: "migrations", type: "object", default: { v: 1 }, hidden: true },
   { key: "onlineHudPos", type: "object", default: {}, hidden: true, client: true },
+  // 0.4.0: the Hub panel folded to its header, per browser (the fold button in its header; not shown in the settings).
+  { key: "onlineHudCollapsed", type: "bool", default: false, hidden: true, client: true },
   { key: "boardPins", type: "object", default: { v: 1, pins: [] }, hidden: true }
 ], { reserved: FEATURE_KEYS });
 

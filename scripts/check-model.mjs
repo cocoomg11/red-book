@@ -296,3 +296,52 @@ export function isToolkitPin(note, toolkitId = "wayfarers-toolkit") {
   const f = note?.flags?.[toolkitId] ?? note?._source?.flags?.[toolkitId];
   return !!(f && typeof f === "object" && f.pin && typeof f.pin === "object");
 }
+
+// ---------------------------------------------------------------- 0.4.0: display-only rule categories (the main window's Scene check page)
+/**
+ * Which category each rule is shown under. Display only: it never changes a finding, its key or a saved ignore. A rule missing
+ * here is shown under "other".
+ */
+export const RULE_CATEGORY = Object.freeze({
+  background: "map", grid: "map", walls: "map", doors: "map", lights: "map",
+  vision: "tokens", tokenActor: "tokens", tokenLink: "tokens", tokenImage: "tokens", npcStats: "tokens",
+  sounds: "media", images: "media",
+  notes: "links", activeTiles: "links", sceneJournal: "links",
+  players: "players"
+});
+/** The categories in display order, with their icons. */
+export const CHECK_CATEGORIES = Object.freeze([
+  { id: "map", icon: "fa-solid fa-map" }, { id: "tokens", icon: "fa-solid fa-chess-pawn" }, { id: "media", icon: "fa-solid fa-photo-film" },
+  { id: "links", icon: "fa-solid fa-link" }, { id: "players", icon: "fa-solid fa-users" }, { id: "other", icon: "fa-solid fa-circle-question" }
+]);
+const SEV_ORDER = { problem: 0, warning: 1, note: 2 };
+/** Findings grouped by category (empty categories left out), each group sorted problem → warning → note (stable). */
+export function groupFindings(findings = []) {
+  const by = new Map();
+  for (const f of Array.isArray(findings) ? findings : []) {
+    const c = RULE_CATEGORY[f?.rule] ?? "other";
+    if (!by.has(c)) by.set(c, []);
+    by.get(c).push(f);
+  }
+  return CHECK_CATEGORIES.filter(c => by.has(c.id)).map(c => ({ ...c, findings: by.get(c.id).map((f, i) => [f, i]).sort((a, b) => ((SEV_ORDER[a[0].severity] ?? 3) - (SEV_ORDER[b[0].severity] ?? 3)) || a[1] - b[1]).map(x => x[0]) }));
+}
+
+/**
+ * The GM client's memory of the last scene-check result per scene (this browser tab, this load; never saved to the world).
+ * Capped at `max` scenes (oldest dropped first).
+ */
+export class ResultMemory {
+  constructor(max = 500) { this.max = max; /** @type {Map<string, any>} */ this.map = new Map(); }
+  get(id) { return this.map.get(String(id)) ?? null; }
+  set(id, result) {
+    const k = String(id); this.map.delete(k); this.map.set(k, result);
+    while (this.map.size > this.max) this.map.delete(this.map.keys().next().value);
+    return result;
+  }
+  pending(id) { return this.set(id, { pending: true }); }
+  delete(id) { this.map.delete(String(id)); }
+  clear() { this.map.clear(); }
+  /** { [sceneId]: result } for the view. */
+  all() { return Object.fromEntries(this.map); }
+  get size() { return this.map.size; }
+}

@@ -1,19 +1,24 @@
 /** Shared bits for windows and documents: dialogs, our folders, opening a document by UUID. */
 import { ID, esc } from "./const.mjs";
+import { UI_CLASSES as CORE_UI } from "../vendor/wanderers-core/index.mjs";
 
 export const DialogV2 = () => foundry.applications.api.DialogV2;
 export const TextEditorImpl = () => foundry.applications.ux?.TextEditor?.implementation ?? globalThis.TextEditor;
 /** Every Red Book window carries this class: no backdrop blur (styles/red-book.css), shared colours. */
 export const WINDOW = "rb-window";
+/** wanderers-core's shared look (styles/wanderers-ui.css): put on every Red Book window next to WINDOW. */
+export const UI_CLASSES = [...CORE_UI];
+/** Plain text escaped for HTML. */
+export const escText = s => esc(s);
 
 /** A yes/no dialog; resolves true, false or null (closed). `options` go to DialogV2 (e.g. an `id` to find and close it later). */
 export function confirm(title, content, options = {}) {
-  return DialogV2().confirm({ classes: [WINDOW], window: { title }, content, rejectClose: false, ...options });
+  return DialogV2().confirm({ classes: [WINDOW, ...UI_CLASSES], window: { title }, content, rejectClose: false, ...options });
 }
 /** A one-form dialog; resolves to the form's values or null. */
 export function form(title, content, label = "OK", width = 460) {
   return DialogV2().prompt({
-    classes: [WINDOW], window: { title }, content, position: { width },
+    classes: [WINDOW, ...UI_CLASSES], window: { title }, content, position: { width },
     ok: { label, callback: (ev, btn) => new foundry.applications.ux.FormDataExtended(btn.form).object }, rejectClose: false
   });
 }

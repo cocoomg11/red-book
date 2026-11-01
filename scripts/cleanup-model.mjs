@@ -12,8 +12,10 @@ export const CATEGORIES = [
   ["reports", "Scene check report journals", true],
   ["flags", "Red Book flags on other documents, including ignored scene-check findings (the documents stay; only our flags go)", true],
   ["folders", "Folders Red Book made, once empty", true],
-  ["settings", "Reset Red Book's settings to defaults (feature toggles; reloads)", false]
+  ["settings", "Reset Red Book's settings to defaults (feature toggles; this browser's Who's online panel spot and fold; reloads)", false]
 ];
+/** Setting scopes "Reset Red Book's settings" covers: the world's, and this browser's client settings (onlineHudPos, onlineHudCollapsed). */
+export const SETTING_SCOPES = ["world", "client"];
 
 const flagsOf = d => d?.flags?.["red-book"];
 /** What a journal entry is to us: "session", "recap", "report", "store" or null. */

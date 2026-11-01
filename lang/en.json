@@ -1,1 +1,187 @@
-{}
+{
+  "REDBOOK": {
+    "Nav": {
+      "label": "Red Book pages",
+      "Tools": "Tools",
+      "Settings": "Settings",
+      "session": "Session",
+      "board": "Board",
+      "check": "Scene check",
+      "online": "Online",
+      "past": "Past sessions",
+      "features": "Features",
+      "tools": "Tool settings",
+      "health": "Health",
+      "data": "Data"
+    },
+    "Common": {
+      "on": "On",
+      "off": "Off",
+      "save": "Save changes",
+      "toolOff": "This tool is turned off",
+      "toolOffHint": "Turn it on in Settings › Features (the world reloads).",
+      "gmOnly": "GM only."
+    },
+    "Session": {
+      "live": "Session running",
+      "notLive": "No session is running.",
+      "logOff": "The session log is turned off.",
+      "since": "{time} so far",
+      "noteBox": "Note box",
+      "end": "End session",
+      "start": "Start session",
+      "startDialog": "Session Start…",
+      "thisSession": "This session",
+      "lastSession": "Last session: {name}",
+      "statEvents": "Events",
+      "statPlayed": "Played",
+      "statCombats": "Combats",
+      "statNotes": "Notes",
+      "statHere": "At the table",
+      "downs": "{n} down",
+      "threads": "{n} open",
+      "noteLabel": "Quick note",
+      "notePlaceholder": "What happened? Start with ? for an open thread.",
+      "thread": "Thread",
+      "gmOnly": "GM only",
+      "addNote": "Add",
+      "filterLabel": "Show events of one kind",
+      "timeline": "Timeline",
+      "noEvents": "Nothing of this kind logged yet.",
+      "more": "Showing the newest {n}; the journal has them all.",
+      "openJournal": "Open the session journal",
+      "none": "No session logged yet. Start one and the timeline fills in as you play.",
+      "noteAdded": "Note added."
+    },
+    "Filter": {
+      "all": "All",
+      "scene": "Scenes",
+      "combat": "Combat",
+      "loot": "Loot",
+      "world": "Rests and world",
+      "quests": "Quests and travel",
+      "notes": "Notes"
+    },
+    "Roster": {
+      "title": "At the table",
+      "none": "No players connected.",
+      "noCharacter": "No character",
+      "hpOf": "Hit points of {name}"
+    },
+    "Board": {
+      "quests": "Active quests",
+      "last": "Last session",
+      "npcs": "NPCs",
+      "journals": "Journals",
+      "scenes": "Scenes",
+      "pinned": "Pinned",
+      "threads": "Open threads",
+      "noThreads": "None.",
+      "noToolkit": "Active quests come from Wayfarer's Toolkit's quest log when that module is active.",
+      "noQuests": "No active quests.",
+      "noSession": "No session logged yet.",
+      "noNpcs": "No NPCs linked from active quests.",
+      "noJournals": "No journals linked from active quests.",
+      "noScenes": "No scenes linked from active quests.",
+      "checkAll": "Check all",
+      "andMore": "and {n} more",
+      "missing": "missing",
+      "view": "View scene",
+      "check": "Check readiness",
+      "unpin": "Unpin",
+      "dropHint": "Drop actors, journals, pages, scenes, tables, items, playlists or macros here (up to {n})."
+    },
+    "Check": {
+      "search": "Find a scene",
+      "noScenes": "No scenes.",
+      "all": "Check all {n}",
+      "pick": "Pick a scene on the left",
+      "readOnly": "Read-only: nothing in the scene is changed. Only ignoring a finding is saved (on the scene).",
+      "run": "Check",
+      "again": "Check again",
+      "export": "Export to journal",
+      "checking": "Checking…",
+      "notChecked": "Not checked",
+      "memory": "Results are kept until you reload, on this browser only.",
+      "fix": "Open it",
+      "ignore": "Ignore on this scene",
+      "unignore": "Un-ignore",
+      "unignoreBy": "Un-ignore (ignored by {name})",
+      "ignoredN": "{n} ignored",
+      "ignoredList": "Ignored ({n})",
+      "clearIgnored": "Clear ignored ({n} saved)",
+      "nothing": "Nothing to fix.",
+      "cat": {
+        "map": "Map, walls and light",
+        "tokens": "Tokens and actors",
+        "media": "Images and sounds",
+        "links": "Notes and links",
+        "players": "Players",
+        "other": "Other"
+      }
+    },
+    "Online": {
+      "title": "Who's online",
+      "all": "Everyone's here",
+      "count": "{present} of {expected} here",
+      "nobody": "No players count yet",
+      "notConnected": "not connected",
+      "gm": "GM",
+      "collapse": "Fold the panel",
+      "expand": "Unfold the panel",
+      "dragHint": "Drag to move · double-click to put back",
+      "hubs": "The panel shows on: {list}.",
+      "noHubs": "No scene is marked Hub (Scene Configuration › Table Tools): the panel shows only in its window.",
+      "window": "Open as a window",
+      "resetPos": "Put the panel back"
+    },
+    "Past": {
+      "session": "Session",
+      "events": "Events",
+      "played": "Played",
+      "actions": "Actions",
+      "open": "Open journal",
+      "recap": "Share as recap",
+      "none": "No sessions yet",
+      "noneHint": "Ended sessions are listed here with a link to their journal."
+    },
+    "Features": {
+      "hint": "A tool that's off registers nothing (no hooks, buttons or key bindings). Saving a change reloads the world."
+    },
+    "Tools": {
+      "pick": "Pick a tool",
+      "advanced": "Advanced",
+      "none": "This tool has no settings.",
+      "clearAll": "Clear all ignored warnings…",
+      "clearAllHint": "Stops ignoring every finding you ignored, on every scene (asks first)."
+    },
+    "Health": {
+      "ok": "All good",
+      "issues": "{n} to look at",
+      "refresh": "Check again"
+    },
+    "Data": {
+      "removeTitle": "Remove Red Book data",
+      "removeHint": "A dry run comes first; nothing changes until you tick, type REMOVE and confirm.",
+      "remove": "Remove Red Book data…"
+    },
+    "Start": {
+      "title": "Session Start",
+      "search": "Find a scene",
+      "scene": "Scene",
+      "ready": "Ready?",
+      "activate": "Activate it for players",
+      "unpause": "Unpause the game",
+      "notPaused": "(not paused)",
+      "log": "Start the session log",
+      "logOpen": "A session is already open.",
+      "checked": "Scene check: {result}",
+      "unchecked": "Scene not checked this load",
+      "active": "active",
+      "go": "Start session"
+    },
+    "Window": {
+      "title": "Red Book"
+    }
+  }
+}

@@ -1,7 +1,8 @@
 /**
  * Scene readiness check (feature "sceneCheck"): read-only. sceneFacts() reads a scene into plain facts, the path cache asks the
  * server whether each file loads, and check-model.mjs turns the facts into findings. A results window lists each scene's findings
- * with a jump-to-fix button; Export writes the report to a GM-only journal. Nothing in the checked scenes is ever changed, except
+ * with a jump-to-fix button (the Red Book window's Scene check page, 0.4.0: master–detail, last results kept in this tab's memory
+ * only); Export writes the report to a GM-only journal. Nothing in the checked scenes is ever changed, except
  * the GM's own list of ignored findings (flags.red-book.ignoredChecks on the scene, written only on a GM's click).
  */
 import { ID, MATT_ID, TOOLKIT_ID, esc } from "./const.mjs";
@@ -9,6 +10,7 @@ import * as C from "./check-model.mjs";
 import { get } from "./core.mjs";
 import { offRules } from "./settings-model.mjs";
 import * as UI from "./ui.mjs";
+import * as Panel from "./panel.mjs";
 
 const safe = UI.safeSync;
 const exists = uuid => !!safe(uuid);
@@ -113,7 +115,7 @@ export async function clearAllIgnored({ confirm = true } = {}) {
   let n = 0;
   for (const id of ids) { try { await game.scenes.get(id)?.unsetFlag(ID, C.IGNORED_FLAG); n++; } catch (e) { console.warn(`${ID} | clear ignored ${id}`, e); } }
   ui.notifications.info(`Red Book: ignored findings cleared on ${n === 1 ? "1 scene" : `${n} scenes`}.`);
-  Results.refreshIgnored();
+  refreshIgnored();
   return n;
 }
 
@@ -129,16 +131,57 @@ export function pick({ scenes, folder, all } = {}) {
   return canvas?.scene ? [canvas.scene] : [];
 }
 
-/** Runs the check and opens the results window. Resolves to the results. */
+// ---------------------------------------------------------------- results memory (GM client only; never saved to the world)
+/** The last result per scene, kept in this tab's memory until reload. */
+const MEMORY = new C.ResultMemory();
+export const memory = () => MEMORY;
+
+/** Checks one scene into memory and refreshes the window (`fresh`: ask the server about every file again). Resolves to the result. */
+export async function checkInto(sceneRef, { fresh = false } = {}) {
+  if (!UI.gmOnly()) return null;
+  const s = sceneOf(sceneRef); if (!s) return null;
+  if (fresh) cache().clear();
+  MEMORY.pending(s.id); Panel.refresh("check");
+  let r;
+  try { r = await checkOne(s); } catch (e) { r = failed(s, e); }
+  MEMORY.set(s.id, r); Panel.refresh("check");
+  return r;
+}
+const failed = (s, e) => ({ scene: { id: s.id, uuid: s.uuid, name: s.name }, findings: [{ rule: "background", severity: "note", text: `Couldn't check this scene: ${e?.message ?? e}`, fix: null, key: "" }], ignored: [], stored: 0, tally: { problem: 0, warning: 0, note: 1 } });
+
+/**
+ * Runs the check on the picked scenes and opens the Red Book window's Scene check page on the first scene (the first with a
+ * problem when there are several). Resolves to the results (as before 0.4.0).
+ */
 export async function run(opts = {}) {
   if (!UI.gmOnly()) return null;
   const list = pick(opts);
   if (!list.length) { ui.notifications.warn("Red Book: no scenes to check."); return []; }
-  const app = Results.instance(); app.results = null; app.label = list.length === 1 ? list[0].name : `${list.length} scenes`; app.render({ force: true });
+  for (const s of list) MEMORY.pending(s.id);
+  Panel.openCheck(list[0].id);
   const results = [];
-  for (const s of list) { try { results.push(await checkOne(s)); } catch (e) { results.push({ scene: { id: s.id, uuid: s.uuid, name: s.name }, findings: [{ rule: "background", severity: "note", text: `Couldn't check this scene: ${e.message}`, fix: null, key: "" }], ignored: [], stored: 0, tally: { problem: 0, warning: 0, note: 1 } }); } }
-  app.results = results; app.render();
+  for (const s of list) {
+    let r; try { r = await checkOne(s); } catch (e) { r = failed(s, e); }
+    MEMORY.set(s.id, r); results.push(r); Panel.refresh("check");
+  }
+  const first = results.find(r => r.tally.problem) ?? results[0];
+  if (list.length > 1 && first) Panel.openCheck(first.scene.id);
   return results;
+}
+
+/** Re-applies each remembered scene's ignore store (no new check) and refreshes the window. */
+export function refreshIgnored() {
+  for (const [id, r] of Object.entries(MEMORY.all())) if (r?.all) MEMORY.set(id, C.applyIgnored(r, ignoredOf(id)));
+  Panel.refresh("check");
+}
+/** Waits for an ignore write, then refreshes (an error is reported, not thrown). */
+export function ignoreAndRefresh(p) {
+  return Promise.resolve(p).then(() => refreshIgnored(), e => { console.warn(`${ID} | ignore`, e); ui.notifications.error("Red Book: couldn't save the ignored list (see console)."); });
+}
+/** Jump-to-fix for the i-th finding (or ignored finding) of a remembered result. */
+export function fixFinding(sceneId, i, ignored = false) {
+  const r = MEMORY.get(sceneId); if (!r || r.pending) return undefined;
+  return fix(sceneId, (ignored ? r.ignored : r.findings)?.[i]?.fix);
 }
 
 /** Writes the results to a GM-only journal "Scene check" with one page per scene (replaced on each export). */
@@ -177,49 +220,6 @@ async function fix(sceneId, f) {
   }
 }
 
-export class Results extends foundry.applications.api.ApplicationV2 {
-  static DEFAULT_OPTIONS = { id: `${ID}-check`, classes: ["rb-check", UI.WINDOW], window: { title: "Red Book · Scene readiness", icon: "fa-solid fa-clipboard-check", resizable: true }, position: { width: 620, height: 600 } };
-  static #app = null;
-  static instance() { return (Results.#app ??= new Results()); }
-  /** Re-applies each shown scene's ignore store (no new check) and re-renders. */
-  static refreshIgnored() {
-    const app = Results.#app; if (!app?.results) return;
-    app.results = app.results.map(r => (r.all ? C.applyIgnored(r, ignoredOf(r.scene.id)) : r));
-    if (app.rendered) app.render();
-  }
-  async _renderHTML() {
-    const div = document.createElement("div"); div.className = "rb-check-body";
-    if (!this.results) { div.innerHTML = `<p><i class="fa-solid fa-spinner fa-spin"></i> Checking ${esc(this.label ?? "")}…</p>`; return div; }
-    const tot = this.results.reduce((t, r) => ({ problem: t.problem + r.tally.problem, warning: t.warning + r.tally.warning, note: t.note + r.tally.note }), { problem: 0, warning: 0, note: 0 });
-    const ign = this.results.reduce((n, r) => n + (r.ignored?.length ?? 0), 0);
-    const row = (r, f, i, ignored) => `<li class="rb-${f.severity}${ignored ? " rb-ignored" : ""}"><span class="rb-sev">${f.severity}</span> <span class="rb-text">${esc(f.text)}</span>`
-      + `${f.fix ? `<button type="button" data-fix data-scene="${r.scene.id}" data-i="${i}" data-ignored="${ignored ? 1 : 0}" data-tooltip="Open it"><i class="fa-solid fa-wrench"></i></button>` : ""}`
-      + `${f.key ? (ignored
-        ? `<button type="button" data-unignore="${esc(f.key)}" data-scene="${r.scene.id}" data-tooltip="Un-ignore${f.ignore?.name ? ` (ignored by ${esc(f.ignore.name)})` : ""}" aria-label="Un-ignore"><i class="fa-solid fa-eye"></i></button>`
-        : `<button type="button" data-ignore="${esc(f.key)}" data-scene="${r.scene.id}" data-tooltip="Ignore on this scene" aria-label="Ignore"><i class="fa-solid fa-eye-slash"></i></button>`) : ""}</li>`;
-    div.innerHTML = `<p class="rb-total">${this.results.length > 1 ? `${this.results.length} scenes: ` : ""}${esc(C.tallyText(tot))}${ign ? ` (${ign} ignored)` : ""}. Read-only: nothing in the scenes was changed.</p>
-      ${this.results.map(r => `<details class="rb-scene" ${this.results.length === 1 || r.tally.problem ? "open" : ""}><summary><strong>${esc(r.scene.name)}</strong> <span class="hint">${esc(C.tallyText(r.tally))}${r.ignored?.length ? ` · ${r.ignored.length} ignored` : ""}</span></summary>
-        ${r.findings.length ? `<ul class="rb-findings">${r.findings.map((f, i) => row(r, f, i, false)).join("")}</ul>` : "<p>Nothing to fix.</p>"}
-        ${r.ignored?.length ? `<details class="rb-ignored-list"><summary>Ignored (${r.ignored.length})</summary><ul class="rb-findings">${r.ignored.map((f, i) => row(r, f, i, true)).join("")}</ul></details>` : ""}
-        ${r.stored ? `<p class="rb-clear-ignored"><button type="button" data-clear-ignored="${r.scene.id}" data-tooltip="Stop ignoring every finding on this scene (${r.stored} saved)"><i class="fa-solid fa-eraser"></i> Clear ignored</button></p>` : ""}</details>`).join("")}
-      <footer class="form-footer"><button type="button" data-action="rerun"><i class="fa-solid fa-rotate"></i> Check again</button><button type="button" data-action="export"><i class="fa-solid fa-file-export"></i> Export to journal</button></footer>`;
-    return div;
-  }
-  _replaceHTML(result, content) {
-    content.replaceChildren(result);
-    content.querySelectorAll("button[data-fix]").forEach(b => b.addEventListener("click", () => {
-      const r = this.results?.find(x => x.scene.id === b.dataset.scene);
-      fix(b.dataset.scene, (b.dataset.ignored === "1" ? r?.ignored : r?.findings)?.[Number(b.dataset.i)]?.fix);
-    }));
-    const after = p => p.then(() => Results.refreshIgnored(), e => { console.warn(`${ID} | ignore`, e); ui.notifications.error("Red Book: couldn't save the ignored list (see console)."); });
-    content.querySelectorAll("button[data-ignore]").forEach(b => b.addEventListener("click", () => after(ignore(b.dataset.scene, b.dataset.ignore))));
-    content.querySelectorAll("button[data-unignore]").forEach(b => b.addEventListener("click", () => after(unignore(b.dataset.scene, b.dataset.unignore))));
-    content.querySelectorAll("button[data-clear-ignored]").forEach(b => b.addEventListener("click", () => after(clearIgnored(b.dataset.clearIgnored))));
-    content.querySelector("[data-action=export]")?.addEventListener("click", () => exportReport(this.results));
-    content.querySelector("[data-action=rerun]")?.addEventListener("click", () => { cache().clear(); run({ scenes: (this.results ?? []).map(r => r.scene.id) }); });
-  }
-}
-
 /** Asks which scenes to check. */
 export async function chooser() {
   if (!UI.gmOnly()) return;
@@ -252,7 +252,9 @@ export function contextOptions(options) {
 
 const apiRaw = {
   run, chooser, checkOne, facts: sceneFacts, exportReport, rules: C.RULES, clearCache: () => cache().clear(),
-  ignored: scene => C.normalizeIgnored(ignoredOf(scene)).entries, ignore, unignore, clearIgnored, clearAllIgnored
+  ignored: scene => C.normalizeIgnored(ignoredOf(scene)).entries, ignore, unignore, clearIgnored, clearAllIgnored,
+  /** Experimental (0.4.0): the last result per scene this load ({ sceneId: result }). */
+  results: () => MEMORY.all(), open: sceneId => Panel.openCheck(sceneId)
 };
 /** Scene check is GM-only: non-GM users get a "GM only" notice and undefined from every member. */
 export const api = C.gateApi(apiRaw, () => !!game.user?.isGM, () => ui.notifications.warn("Red Book: GM only."));

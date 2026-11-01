@@ -17,7 +17,8 @@ export function plan() {
     folders: game.folders.filter(f => f.type === "JournalEntry").map(f => ({ id: f.id, name: f.name, flags: f.flags })),
     // Every other world document and its embedded documents (journals are sorted above, so they're skipped here).
     docs: flaggedDocuments(ID, d => d.documentName !== "JournalEntry").map(d => ({ uuid: d.uuid, name: d.name, flags: { [ID]: { any: true } } })),
-    settings: changedSettings(settingValues(ID)).map(s => ({ key: s.key, changed: true }))
+    // World settings, plus this browser's own (client scope: the Who's online panel spot and fold, 0.4.0). Other browsers keep theirs.
+    settings: changedSettings(settingValues(ID), { scopes: M.SETTING_SCOPES }).map(s => ({ key: s.key, changed: true }))
   });
 }
 

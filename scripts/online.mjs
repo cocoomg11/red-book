@@ -10,15 +10,22 @@
  * (`wayfarers-toolkit.allPlayersOnline` / `.playerCountChanged`) fire too, with the same payload, unless the toolkit is active and
  * still provides its own Who's online (its `api.online`), or the setting "Also fire the old hook names" is off.
  *
- * The panel can be dragged by its title (world setting onlineDrag); each user's spot is their own client setting onlineHudPos, kept on
+ * The panel can be folded to its header (0.4.0; client setting onlineHudCollapsed, per browser) with the button in its header
+ * (keyboard: Tab to it, Enter or Space). The panel can be dragged by its header (world setting onlineDrag); each user's spot is their own client setting onlineHudPos, kept on
  * screen on load and resize; double-click the title to go back to the position choice. Writes no documents.
  */
 import * as M from "./online-model.mjs";
-import { ID, TOOLKIT_ID, esc } from "./const.mjs";
+import { ID, TOOLKIT_ID } from "./const.mjs";
 import { get, set, warn } from "./core.mjs";
 import { sceneTab } from "../vendor/wanderers-core/foundry/index.mjs";
+import { UI_CLASSES } from "../vendor/wanderers-core/index.mjs";
+import * as V from "./view.mjs";
+import { t } from "./i18n.mjs";
+import * as Panel from "./panel.mjs";
 
 const HUD_ID = "rb-online-hud";
+/** The Hub panel's drag handle (0.4.0: the themed header, no longer the h3). */
+export const DRAG_HANDLE = ".rb-online-head";
 /** The scene flag: flags.red-book.hubScene (boolean). */
 export const HUB_FLAG = "hubScene";
 /** @type {any} */
@@ -43,14 +50,6 @@ export function toolkitProvides() {
   try { return !!tk.api?.online; } catch { return false; }
 }
 
-function boardHTML(r, { compact = false } = {}) {
-  const row = e => `<li class="${e.active ? "on" : "off"}${e.counts ? "" : " extra"}" title="${esc(e.name)}${e.character ? ` (${esc(e.character.name)})` : ""}${e.active ? "" : ": not connected"}">
-    ${e.character?.img ? `<img src="${esc(e.character.img)}" alt="">` : `<span class="dot" style="background:${esc(e.color || "#888")}"></span>`}
-    <span class="nm">${esc(e.label)}${e.character && !compact ? ` <small>${esc(e.name)}</small>` : ""}${e.isGM ? " <small>GM</small>" : ""}</span></li>`;
-  const head = r.all ? `<p class="rb-online-all"><i class="fa-solid fa-circle-check"></i> Everyone's here</p>` : r.expected ? `<p class="rb-online-count">${r.present} of ${r.expected} here</p>` : `<p class="rb-online-count">No players count yet</p>`;
-  return `${head}<ul class="rb-online-list">${r.entries.filter(e => e.active || e.counts).map(row).join("")}</ul>`;
-}
-
 /** Foundry's own UI the panel keeps clear of (v14: scene navigation is a column right of the scene controls). */
 function uiRects() {
   const r = sel => { const e = document.querySelector(sel); if (!e || (e.offsetParent === null && getComputedStyle(e).position !== "fixed")) return null; return e.getBoundingClientRect(); };
@@ -66,13 +65,12 @@ function place(el = document.getElementById(HUD_ID)) {
   el.style.left = `${p.left}px`; el.style.top = `${p.top}px`;
 }
 
-/** Drag by the title (pointer events); double-click the title to go back to the default spot. */
+/** Drag by the header (pointer events; not from the fold button); double-click the header to go back to the default spot. */
 function wireDrag(el) {
-  const h = el.querySelector("h3"); if (!h || get("onlineDrag") === false) return;
-  h.title = "Drag to move · double-click to put back";
+  const h = el.querySelector(DRAG_HANDLE); if (!h || get("onlineDrag") === false) return;
   /** @type {{ x: number, y: number, w: number, h: number } | null} */ let start = null;
   h.addEventListener("pointerdown", ev => {
-    if (ev.button !== 0) return;
+    if (ev.button !== 0 || ev.target?.closest?.("button")) return;
     const b = el.getBoundingClientRect(); start = { x: ev.clientX - b.left, y: ev.clientY - b.top, w: b.width, h: b.height };
     dragging = true; el.classList.add("dragging"); h.setPointerCapture?.(ev.pointerId); ev.preventDefault();
   });
@@ -86,7 +84,7 @@ function wireDrag(el) {
     set("onlineHudPos", { left: parseFloat(el.style.left), top: parseFloat(el.style.top) }).catch(e => warn("who's online position", e));
   };
   h.addEventListener("pointerup", end); h.addEventListener("pointercancel", end);
-  h.addEventListener("dblclick", ev => { ev.preventDefault(); set("onlineHudPos", {}).then(() => place()).catch(() => { }); });
+  h.addEventListener("dblclick", ev => { if (ev.target?.closest?.("button")) return; ev.preventDefault(); set("onlineHudPos", {}).then(() => place()).catch(() => { }); });
 }
 
 function renderHud(r) {
@@ -95,9 +93,22 @@ function renderHud(r) {
   if (!el) { el = document.createElement("aside"); el.id = HUD_ID; el.setAttribute("aria-label", "Who's online"); document.body.append(el); }
   if (dragging) return;
   const drag = get("onlineDrag") !== false;
-  el.className = `rb-online-hud${drag ? " movable" : ""}${r.all ? " all" : ""}`;
-  el.innerHTML = `<h3>Who's online</h3>${boardHTML(r, { compact: true })}`;
+  const collapsed = get("onlineHudCollapsed") === true;
+  el.className = `rb-online-hud ${UI_CLASSES.join(" ")}${drag ? " movable" : ""}${r.all ? " all" : ""}${collapsed ? " collapsed" : ""}`;
+  el.innerHTML = V.hudHTML(r, { collapsed, drag });
+  el.querySelector(".rb-online-toggle")?.addEventListener("click", ev => { ev.preventDefault(); ev.stopPropagation(); toggleCollapsed(); });
+  // Enter and Space press the button; keep them from Foundry's key bindings (Space pauses the game).
+  el.querySelector(".rb-online-toggle")?.addEventListener("keydown", ev => { if (ev.key === " " || ev.key === "Enter") ev.stopPropagation(); });
   wireDrag(el); place(el);
+}
+
+/** Folds or unfolds the Hub panel for this browser (client setting onlineHudCollapsed); keeps focus on the toggle. */
+export async function toggleCollapsed(value) {
+  const next = typeof value === "boolean" ? value : get("onlineHudCollapsed") !== true;
+  await set("onlineHudCollapsed", next);
+  renderHud(read());
+  document.querySelector(`#${HUD_ID} .rb-online-toggle`)?.focus();
+  return next;
 }
 
 /** Resets this user's dragged position (the panel goes back to the world's position choice). */
@@ -109,14 +120,16 @@ export function refresh() {
   const ch = M.changes(last, r); last = r;
   try { renderHud(r); } catch (e) { warn("who's online panel", e); }
   if (app?.rendered) app.render();
+  Panel.refresh("online"); Panel.refresh("session");
   const names = M.hookNames(ch, { toolkitProvides: toolkitProvides(), legacy: get("onlineLegacyHooks") !== false });
   for (const n of names) { try { Hooks.callAll(n, M.hookPayload(r)); } catch (e) { warn(`hook ${n}`, e); } }
   return r;
 }
 
 export class OnlineApp extends foundry.applications.api.ApplicationV2 {
-  static DEFAULT_OPTIONS = { id: `${ID}-online`, classes: ["rb-window", "rb-online-window"], window: { title: "Who's online", icon: "fa-solid fa-users", resizable: true }, position: { width: 300, height: "auto" } };
-  async _renderHTML() { const div = document.createElement("div"); div.className = "rb-online-board"; div.innerHTML = boardHTML(read()); return div; }
+  static DEFAULT_OPTIONS = { id: `${ID}-online`, classes: ["rb-window", "rb-online-window", ...UI_CLASSES], window: { title: "Who's online", icon: "fa-solid fa-users", resizable: true }, position: { width: 300, height: "auto" } };
+  get title() { return t("Online.title"); }
+  async _renderHTML() { const div = document.createElement("div"); div.innerHTML = V.onlinePageHTML(read(), { page: false }); return div; }
   _replaceHTML(result, content) { content.replaceChildren(result); }
 }
 /** Opens the Who's online window (everyone). */
@@ -143,4 +156,4 @@ export function init() {
 export function ready() { refresh(); }
 
 /** Everyone may read who's online (it's what the panel shows). */
-export const api = { read, open, refresh, resetPosition, isHub, hooks: { ...M.ONLINE_HOOKS }, legacyHooks: { ...M.LEGACY_HOOKS } };
+export const api = { read, open, refresh, resetPosition, toggleCollapsed, isHub, hooks: { ...M.ONLINE_HOOKS }, legacyHooks: { ...M.LEGACY_HOOKS } };

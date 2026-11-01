@@ -29,6 +29,7 @@ Hooks.once("init", () => {
   Hooks.on("getSceneControlButtons", controls => {
     if (!game.user.isGM) return;
     const tokens = controls.tokens ?? controls.token; if (!tokens?.tools) return;
+    tokens.tools.rbApp = { name: "rbApp", title: "Red Book", icon: "fa-solid fa-book-open-reader", order: 118, button: true, visible: true, onChange: () => Panel.open() };
     if (F.on("sessionStart")) tokens.tools.rbStart = { name: "rbStart", title: "Session Start", icon: "fa-solid fa-flag-checkered", order: 119, button: true, visible: true, onChange: () => Start.open() };
     if (F.on("sessionLog")) Session.controls(tokens.tools);
     if (F.on("prepBoard")) tokens.tools.rbBoard = { name: "rbBoard", title: "Next-session board", icon: "fa-solid fa-thumbtack", order: 122, button: true, visible: true, onChange: () => Board.open() };
@@ -44,6 +45,7 @@ Hooks.once("init", () => {
 
 Hooks.once("ready", () => {
   L.start();
+  Panel.ready();
   if (F.on("sessionLog")) Session.ready();
   if (F.on("prepBoard")) Board.ready();
   if (F.on("whosOnline")) Migrate.clientPosition().finally(() => Online.ready());
@@ -58,8 +60,8 @@ Hooks.once("ready", () => {
     get sceneCheck() { return F.on("sceneCheck") ? Check.api : undefined; },
     get sessionStart() { return F.on("sessionStart") ? Start.api : undefined; },
     get online() { return F.on("whosOnline") ? Online.api : undefined; },
-    /** GM only. */
-    panel: tab => Panel.open(tab),
+    /** GM only: opens the Red Book window, on a page (session, board, check, online, past, features, tools, health, data) or an old tab name. */
+    panel: page => Panel.open(page),
     /** GM only: the read-only health report ([{ title, lines }]); undefined for players. */
     health: () => { if (!gm()) { deny(); return undefined; } return report(deps); },
     get cleanup() { return Cleanup.api; },
