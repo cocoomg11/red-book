@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.8.0 (2026-11-01)
+
+Small fixes and comforts from a live run-through. No data is rewritten; nothing new is stored in the world.
+
+### Changed
+- **"Start a session?" no longer pops up every load.** New setting *Ask to start a session when the world loads* (Session log tab, per browser): **Quiet** (default) shows a small banner at the bottom of the screen with a *Start session* button and a close button, which you can ignore while prepping; **Ask** is the old dialog, now with *Don't ask again in this browser* (switches this browser to Never); **Never** shows nothing. The old world switch is gone from the settings; if you had turned it off, each GM browser starts on Never. A session started any other way still closes the banner or dialog.
+- **Scene check names no longer cut off.** The scene list is a little wider and names wrap to two lines; hovering a name always shows it in full (the detail heading too).
+- **Scene check results survive a reload.** The last result per scene is saved in this browser (localStorage, one entry per world; never in the world, so players never receive it), at most 200 scenes, about 1 MB, deleted scenes dropped. Each result shows when it was made (*Checked 18:20*, with the date on another day). **Clear saved results** on the Scene check page forgets them; Remove Red Book data's settings reset does too. Ignored findings are still read from the scene, so a saved result always shows today's ignores.
+- **Timeline without a calendar.** When the world uses Foundry's default calendar at year 0, log lines no longer show the meaningless in-world time (*0000-01-01 13:30:06*); old lines with such a stamp hide it too. Real-time clock times stay. A world with a calendar set up (or a year above 0) keeps its in-world time.
+- **Prep list count is clearer.** The board's prep list badge said *0/100*; it now says *3 to do* (Done takes an item off the list, so there is no done count). The 100-item limit is in the badge's tooltip, and in the badge itself once the list is nearly full (*85 to do · max 100*).
+- **Open Red Book has a default key: Shift+R** (Foundry core and dnd5e bind nothing to Shift+R). A key you already picked stays. Ctrl+Shift+N (Quick note) is unchanged.
+- **`api.open(page)`** opens (or brings forward) the Red Book window, optionally on a page; it is what the Wanderer's Satchel will use to launch Red Book. `api.panel(page)` still works. New: `api.sceneCheck.clearSaved({ confirm })`; `api.sceneCheck.results()` now includes saved results, each with its time `at`.
+- Wanderer's Satchel registration: every per-browser setting (now including `startAsk`) is in `skipSettings`, so settings backups never carry one browser's habits.
+
+### Untested in Foundry
+Unit tests (166, passing in UTC, New York and Tokyo) cover the new setting and its carry-over, the dialog answer and banner, the Satchel skip list and cleanup text, the scene-list tooltip and wrap, saving/loading/capping/pruning results, the *Checked* time, the in-world time rules, the prep badge, the key definitions and `api.open`. Check in a live v14 world (dnd5e 6.x) as GM:
+
+- [ ] Fresh browser, no session open: reload shows the quiet banner (not a dialog); *Start session* starts one and the banner goes; the close button just hides it. Start a session from the token controls while the banner is up: it disappears.
+- [ ] Set *Ask*: reload shows the dialog; tick *Don't ask again* and click No: notice shown, setting now Never, next reload shows nothing. Yes with the box ticked starts a session and sets Never.
+- [ ] A world where the old *Ask to start a session on load* was off: the first load in each GM browser is quiet (Never), and the setting shows Never.
+- [ ] Banner placement over the hotbar/chat at small window sizes; light and dark themes.
+- [ ] Scene check list: a long scene name wraps to two lines, hover shows the full name; the list column width at the default window size.
+- [ ] Check a few scenes, reload: results are back with *Checked HH:MM*; ignore a finding then reload: still ignored. Delete a checked scene, reload: gone from saved results. *Clear saved results* (confirm): list back to *Not checked*, and stays so after a reload. A second world in the same browser keeps its own results.
+- [ ] Timeline in a world with no calendar set: no *0000-01-01* times on new or old lines, in the window and in the journal page; a world with a calendar module or a configured calendar still shows in-world time.
+- [ ] Board prep list badge reads *n to do*; tooltip shows the limit.
+- [ ] Shift+R opens the Red Book window (and doesn't fire while typing in a text field); Configure Controls shows Shift+R under Red Book; a previously chosen key still works. Ctrl+Shift+N still opens the quick note.
+- [ ] `game.modules.get("red-book").api.open("check")` opens the window on the Scene check page; the Wanderer's Satchel still lists Red Book and its backup leaves `startAsk` out.
+- [ ] Remove Red Book data with *Reset settings* ticked: `startAsk` back to Quiet and saved scene-check results gone in this browser.
+
 ## 0.7.1 (2026-11-01)
 
 Moves to **wanderers-core 0.5.1** (patch: every shared "Module data" journal folder is hidden, and duplicates are merged when the store is filed). No Red Book API, setting or data changes.
