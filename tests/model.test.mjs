@@ -44,8 +44,10 @@ test("cleanup plan: only our documents and flags", () => {
   assert.equal(dry.find(r => r.key === "flags").ticked, true);
 });
 
-test("feature registry: five tools, stable keys, needs nothing from Foundry", async () => {
+test("feature registry: stable keys, needs nothing from Foundry; Discord off by default", async () => {
   const F = await import("../scripts/features.mjs");
-  assert.deepEqual(F.FEATURES.map(f => f.key), ["feature-sessionLog", "feature-prepBoard", "feature-sceneCheck", "feature-sessionStart", "feature-whosOnline"]);
-  assert.ok(F.FEATURES.every(f => f.default === true && f.hint));
+  assert.deepEqual(F.FEATURES.map(f => f.key), ["feature-sessionLog", "feature-prepBoard", "feature-sceneCheck", "feature-sessionStart", "feature-whosOnline",
+    "feature-questEvents", "feature-journeys", "feature-prepList", "feature-openKey", "feature-discord"]);
+  assert.ok(F.FEATURES.every(f => f.hint));
+  assert.ok(F.FEATURES.every(f => f.default === (f.id !== "discord")));
 });

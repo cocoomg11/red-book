@@ -189,19 +189,163 @@ export function durationText(seconds) {
 /** Quest state for diffing: { status, name, done: [objective ids], objectives: { id: text } }. */
 export function questState(name, q = {}) {
   const objs = Array.isArray(q.objectives) ? q.objectives.filter(o => o && o.text) : [];
-  return { name: String(name ?? ""), status: String(q.status ?? "available"), hidden: !!q.hidden, done: objs.filter(o => o.done).map(o => String(o.id ?? o.text)), objectives: Object.fromEntries(objs.map(o => [String(o.id ?? o.text), String(o.text)])) };
+  const oid = o => String(o.id ?? o.text);
+  return { name: String(name ?? ""), status: String(q.status ?? "available"), hidden: !!q.hidden, done: objs.filter(o => o.done).map(oid), objectives: Object.fromEntries(objs.map(o => [oid(o), String(o.text)])), secret: objs.filter(o => o.hidden).map(oid) };
 }
-/** Events for one quest's change: given, completed, failed, reopened, objectives ticked. `before` null = a new quest. */
+/**
+ * Events for one quest's change: given, completed, failed, reopened, objectives ticked. `before` null = a new quest. A hidden quest's
+ * lines, and a hidden objective's, are marked `private` (GM only: kept out of the recap).
+ */
 export function diffQuest(before, after) {
+  /** @type {{ type: string, text: string, data: any, private: boolean }[]} */
   const out = []; if (!after) return out;
   const was = before?.status ?? "available";
   if (after.status !== was) {
     const verb = { active: was === "available" ? "given" : "reopened", completed: "completed", failed: "failed", available: "reset" }[after.status];
-    if (verb && verb !== "reset") out.push({ type: "quest", text: `Quest ${verb}: ${after.name}.`, data: { status: after.status } });
+    if (verb && verb !== "reset") out.push({ type: "quest", text: `Quest ${verb}: ${after.name}.`, data: { status: after.status }, private: !!after.hidden });
   }
   const had = new Set(before?.done ?? []);
-  for (const id of after.done) if (!had.has(id) && before) out.push({ type: "objective", text: `Objective done: ${after.name}: ${after.objectives[id] ?? id}.` });
+  const secret = new Set(after.secret ?? []);
+  for (const id of after.done) if (!had.has(id) && before) out.push({ type: "objective", text: `Objective done: ${after.name}: ${after.objectives[id] ?? id}.`, data: { objective: id }, private: !!after.hidden || secret.has(id) });
   return out;
+}
+
+// ---------------------------------------------------------------- toolkit hooks (0.5.0): quest changes and journeys
+/** The companion toolkit's hooks Red Book listens to (0.5.0; see README, Integrations). Both carry ids and display names only. */
+export const TOOLKIT_HOOKS = Object.freeze({ questUpdated: "wayfarersToolkit.questUpdated", journey: "wayfarersToolkit.journey" });
+/** The `change` values of the toolkit's `wayfarersToolkit.questUpdated` hook. */
+export const QUEST_CHANGES = Object.freeze(["started", "completed", "failed", "objective", "updated", "assigned"]);
+const DOC_ID = /^[A-Za-z0-9]{16}$/;
+/** A journal id from an id or a "JournalEntry.<id>" UUID, or "". */
+const journalId = v => { const s = String(v ?? "").trim().replace(/^JournalEntry\./, ""); return DOC_ID.test(s) ? s : ""; };
+/**
+ * Reads the toolkit's `wayfarersToolkit.questUpdated` payload `{ questId, change }` (ids only). Returns `{ questId, change }` or null
+ * for anything else (unknown change, bad id, not an object).
+ * @param {any} p
+ * @returns {{ questId: string, change: string } | null}
+ */
+export function readQuestHook(p) {
+  if (!p || typeof p !== "object") return null;
+  const questId = journalId(p.questId); const change = String(p.change ?? "");
+  return questId && QUEST_CHANGES.includes(change) ? { questId, change } : null;
+}
+/** The key a logged quest event is deduped by: "<questId>:<change>[:<objective id>]" (both sources compute the same one). */
+export function questKey(questId, e) {
+  if (!questId || !e) return "";
+  if (e.type === "objective") return `${questId}:objective:${e.data?.objective ?? ""}`;
+  const c = { active: "started", completed: "completed", failed: "failed" }[e.data?.status];
+  return e.type === "quest" && c ? `${questId}:${c}` : "";
+}
+
+/**
+ * The line logged when the toolkit's hook reports a status change the quest data didn't show as a change (the change happened before
+ * Red Book read the quest, say). Only when the quest's current status agrees with the hook; null otherwise (objective, updated and
+ * assigned changes are logged from the quest data only). A hidden quest's line is GM only.
+ * @param {string} change @param {{ name: string, status: string, hidden?: boolean } | null} state
+ */
+export function questFallback(change, state) {
+  const status = { started: "active", completed: "completed", failed: "failed" }[change];
+  if (!status || !state || state.status !== status) return null;
+  return { type: "quest", text: `Quest ${change === "started" ? "given" : change}: ${state.name || "a quest"}.`, data: { status }, private: !!state.hidden };
+}
+
+/**
+ * Keys logged recently (pure; the caller passes the time). `seen(key, now)` is true when `key` was marked within `window` ms;
+ * `mark(key, now)` remembers it. At most `max` keys are kept (oldest go first).
+ */
+export class Recent {
+  constructor({ window = 15000, max = 500 } = {}) { this.window = window; this.max = max; /** @type {Map<string, number>} */ this.at = new Map(); }
+  /** @param {string} key @param {number} now */
+  seen(key, now) { const t = this.at.get(key); return t !== undefined && now - t <= this.window; }
+  /** @param {string} key @param {number} now */
+  mark(key, now) {
+    this.at.delete(key); this.at.set(key, now);
+    while (this.at.size > this.max) this.at.delete(/** @type {string} */ (this.at.keys().next().value));
+  }
+  get size() { return this.at.size; }
+}
+
+/**
+ * Merges two reports of the same change from two sources, so it is logged once (pure; the caller passes the time). The *primary*
+ * source is logged at once; the *secondary* one waits `delay` ms (`settle`) and is logged only if no primary report of the same key
+ * came within `window` ms. Quests: primary = the journal flag (it names the objective), secondary = the toolkit's hook. Journeys:
+ * primary = the toolkit's hook (it has hours and cost), secondary = the Travel Log page line.
+ * Each report is used once: two objectives ticked in a row (two primaries) both log. A secondary repeated within `repeat` ms (the hook
+ * heard by two GM tabs) is dropped. At most `max` keys are remembered.
+ */
+export class Merge {
+  constructor({ window = 15000, delay = 2000, repeat = 1500, max = 200 } = {}) {
+    this.window = window; this.delay = delay; this.repeat = repeat; this.max = max;
+    /** @type {Map<string, { source: "primary" | "secondary", at: number, state: "open" | "pending" | "logged" | "used" }[]>} */
+    this.keys = new Map();
+  }
+  /** @param {string} key @param {number} now */
+  #list(key, now) { const l = (this.keys.get(key) ?? []).filter(r => now - r.at <= this.window); this.keys.delete(key); if (l.length) this.keys.set(key, l); return l; }
+  #put(key, list, r) {
+    list.push(r); this.keys.delete(key); this.keys.set(key, list.slice(-20));
+    while (this.keys.size > this.max) this.keys.delete(/** @type {string} */ (this.keys.keys().next().value));
+  }
+  /** A primary report: true = log it now (false: a secondary report of it was already logged). Cancels a waiting secondary. */
+  primary(key, now) {
+    if (!key) return true;
+    const list = this.#list(key, now);
+    const sec = list.find(r => r.source === "secondary" && (r.state === "pending" || r.state === "logged"));
+    if (sec?.state === "logged") { sec.state = "used"; return false; }
+    if (sec) { sec.state = "used"; this.#put(key, list, { source: "primary", at: now, state: "used" }); return true; }
+    this.#put(key, list, { source: "primary", at: now, state: "open" });
+    return true;
+  }
+  /** A secondary report: "skip" (already logged by the primary, or a repeat) or "wait" (call settle(key, at) after `delay`). */
+  secondary(key, now) {
+    if (!key) return "wait";
+    const list = this.#list(key, now);
+    const pri = list.find(r => r.source === "primary" && r.state === "open");
+    if (pri) { pri.state = "used"; return "skip"; }
+    if (list.some(r => r.source === "secondary" && now - r.at <= this.repeat)) return "skip";
+    this.#put(key, list, { source: "secondary", at: now, state: "pending" });
+    return "wait";
+  }
+  /** After the delay: true = log the secondary report made at `at` (no primary came meanwhile). */
+  settle(key, at) {
+    const r = (this.keys.get(key) ?? []).find(x => x.source === "secondary" && x.at === at);
+    if (!r || r.state !== "pending") return false;
+    r.state = "logged"; return true;
+  }
+  get size() { return this.keys.size; }
+}
+
+const NAME_MAX = 100;
+const clipName = v => plain(String(v ?? "")).slice(0, NAME_MAX);
+const coinNum = v => { const n = Math.floor(Number(v)); return Number.isFinite(n) && n > 0 ? Math.min(n, 1e9) : 0; };
+/**
+ * Reads the toolkit's `wayfarersToolkit.journey` payload `{ kind: "hex" | "flight", fromId, toId, fromName, toName, hours,
+ * cost: { gp, sp, cp }, partyId }`. Names are display strings (plain text, clipped); ids are kept as short strings. null when the kind
+ * is unknown or neither name is given.
+ * @param {any} p
+ */
+export function readJourney(p) {
+  if (!p || typeof p !== "object" || (p.kind !== "hex" && p.kind !== "flight")) return null;
+  const fromName = clipName(p.fromName), toName = clipName(p.toName);
+  if (!fromName && !toName) return null;
+  const id = v => String(v ?? "").slice(0, 64);
+  const hours = Number(p.hours);
+  return {
+    kind: /** @type {"hex" | "flight"} */ (p.kind), fromId: id(p.fromId), toId: id(p.toId), fromName, toName, partyId: id(p.partyId),
+    hours: Number.isFinite(hours) && hours > 0 ? Math.min(hours, 24 * 365) : 0,
+    cost: { gp: coinNum(p.cost?.gp), sp: coinNum(p.cost?.sp), cp: coinNum(p.cost?.cp) }
+  };
+}
+/** "2 gp 5 sp", or "" when free. */
+export const costText = (c = {}) => ["gp", "sp", "cp"].filter(k => c[k] > 0).map(k => `${c[k]} ${k}`).join(" ");
+/** The Travel log kind a journey pairs with: a flight, or "travel" for a hex trip (the Travel Log page's classes). */
+export const journeyKind = j => (j?.kind === "flight" ? "flight" : "travel");
+/** The timeline event for a journey read with readJourney: type "travel". */
+export function journeyEvent(j) {
+  if (!j) return null;
+  const route = `${j.fromName || "?"} → ${j.toName || "?"}`;
+  const parts = [route, j.hours ? durationText(Math.round(j.hours * 3600)) : "", costText(j.cost)].filter(Boolean);
+  const kind = journeyKind(j);
+  return { type: "travel", text: `${kind === "flight" ? "Flight" : "Travel"}: ${parts.join(", ")}.`, data: { kind, via: "hook", fromId: j.fromId, toId: j.toId, partyId: j.partyId, hours: j.hours, cost: j.cost } };
 }
 
 /** New lines appended to the toolkit's Travel Log page, classed as flight, travel or other. The session-start line is skipped. */
@@ -226,26 +370,38 @@ export function lootRollEvent(st) {
 
 // ---------------------------------------------------------------- summary and page
 const NOTABLE = new Set(["death", "level", "quest", "combatStart"]);
-/** Counts by type, notable moments (kills, level-ups, quests, combats) and open threads. */
+const QUESTS = new Set(["quest", "objective"]);
+/**
+ * Counts by type, notable moments (kills, level-ups, quests, combats), quest progress (0.5.0: quests and objectives, GM-only ones
+ * marked private) and open threads.
+ */
 export function summarize(session) {
   const counts = {};
   for (const e of session.events) if (e.type !== "session") counts[e.type] = (counts[e.type] ?? 0) + 1;
-  const notable = session.events.filter(e => NOTABLE.has(e.type)).slice(0, 20).map(e => e.text);
+  const notable = session.events.filter(e => NOTABLE.has(e.type) && !e.private).slice(0, 20).map(e => e.text);
   const threads = session.events.filter(e => e.type === "note" && e.thread).map(e => ({ id: e.id, text: e.text, private: e.private }));
+  const quests = session.events.filter(e => QUESTS.has(e.type)).slice(0, 50).map(e => ({ text: e.text, private: e.private }));
   const real = session.endedAt && session.startedAt ? session.endedAt - session.startedAt : 0;
   const world = session.endWorld - session.startWorld;
-  return { counts, notable, threads, realMs: Math.max(0, real), worldSeconds: world, dropped: session.dropped ?? 0 };
+  return { counts, notable, quests, threads, realMs: Math.max(0, real), worldSeconds: world, dropped: session.dropped ?? 0 };
 }
 
 export function summaryHTML(sum) {
   const counts = Object.entries(sum.counts).filter(([, n]) => n).map(([k, n]) => `<li>${esc(TYPES[k]?.label ?? k)}: ${n}</li>`).join("");
   const length = [sum.realMs ? `Played ${durationText(Math.round(sum.realMs / 1000))}` : "", sum.worldSeconds ? `in-world ${durationText(sum.worldSeconds)}` : ""].filter(Boolean).join(", ");
   const pubThreads = sum.threads.filter(t => !t.private), privThreads = sum.threads.filter(t => t.private);
+  const quests = Array.isArray(sum.quests) ? sum.quests : [];
+  const pubQuests = quests.filter(q => !q.private), privQuests = quests.filter(q => q.private);
+  // Quest lines have their own list (0.5.0); older summaries without one keep them under Notable moments.
+  const questText = new Set(quests.map(q => q.text));
+  const notable = (sum.notable ?? []).filter(x => !questText.has(x));
   return [
     `<section class="rb-summary"><h2>Summary</h2>`,
     length ? `<p>${esc(length)}.</p>` : "",
     counts ? `<ul>${counts}</ul>` : `<p>Nothing was logged.</p>`,
-    sum.notable.length ? `<h3>Notable moments</h3><ul>${sum.notable.map(t => `<li>${esc(t)}</li>`).join("")}</ul>` : "",
+    notable.length ? `<h3>Notable moments</h3><ul>${notable.map(t => `<li>${esc(t)}</li>`).join("")}</ul>` : "",
+    pubQuests.length ? `<h3>Quests</h3><ul>${pubQuests.map(q => `<li>${esc(q.text)}</li>`).join("")}</ul>` : "",
+    privQuests.length ? `<section class="secret" id="secret-rb-quests"><p><strong>GM-only quest progress</strong></p><ul>${privQuests.map(q => `<li>${esc(q.text)}</li>`).join("")}</ul></section>` : "",
     pubThreads.length ? `<h3>Open threads</h3><ul>${pubThreads.map(t => `<li>${esc(t.text)}</li>`).join("")}</ul>` : "",
     privThreads.length ? `<section class="secret" id="secret-rb-threads"><p><strong>Private open threads</strong></p><ul>${privThreads.map(t => `<li>${esc(t.text)}</li>`).join("")}</ul></section>` : "",
     sum.dropped ? `<p><em>${plural(sum.dropped, "older event")} dropped to keep the log under its size cap.</em></p>` : "",

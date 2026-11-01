@@ -21,6 +21,23 @@ export const REQUESTS = defineRequests({
     },
     from: "gm", maxBytes: 16384
   },
+  /** 0.5.0: the toolkit's quest hook heard on another GM tab, relayed to the recording tab (ids only, like the hook). */
+  quest: { fields: { questId: { type: "id" }, change: { type: "string", oneOf: ["started", "completed", "failed", "objective", "updated", "assigned"] } }, from: "gm", maxBytes: 512 },
+  /**
+   * 0.5.0: the toolkit's journey hook heard on another GM tab, relayed to the recording tab (GMs only; players' clients never relay).
+   * The same fields as the hook (see README, Integrations); session-model readJourney() reads them again.
+   */
+  journey: {
+    fields: {
+      kind: { type: "string", oneOf: ["hex", "flight"] },
+      fromId: { type: "string", max: 64, optional: true }, toId: { type: "string", max: 64, optional: true },
+      fromName: { type: "string", max: 200, optional: true }, toName: { type: "string", max: 200, optional: true },
+      hours: { type: "number", min: 0, max: 100000, optional: true },
+      cost: { type: "object", fields: { gp: { type: "number", min: 0, optional: true }, sp: { type: "number", min: 0, optional: true }, cp: { type: "number", min: 0, optional: true } }, optional: true },
+      partyId: { type: "string", max: 64, optional: true }
+    },
+    from: "gm", maxBytes: 2048
+  },
   /** A rest finished on whichever client took it (players too); the handler checks the sender owns the actor. */
   rest: { fields: { uuid: { type: "uuid" }, long: { type: "boolean" } }, maxBytes: 1024 },
   /** A journal or page shown with Journal.show; the handler checks the sender owns the document. */

@@ -59,8 +59,9 @@
       "combat": "Combat",
       "loot": "Loot",
       "world": "Rests and world",
-      "quests": "Quests and travel",
-      "notes": "Notes"
+      "quests": "Quests",
+      "notes": "Notes",
+      "travel": "Travel"
     },
     "Roster": {
       "title": "At the table",

@@ -7,7 +7,7 @@
  */
 import { ID, HOOKS, TOOLKIT_ID, esc } from "./const.mjs";
 import * as M from "./session-model.mjs";
-import { L, get, set, log, warn } from "./core.mjs";
+import { F, L, get, set, log, warn } from "./core.mjs";
 import { offGroups } from "./settings-model.mjs";
 import * as UI from "./ui.mjs";
 import { gateApi } from "./check-model.mjs";
@@ -18,7 +18,9 @@ const getProp = (o, p) => foundry.utils.getProperty(o, p);
 
 /** The leader's in-memory state; other clients keep only `null`. */
 /** @type {any} */
-const R = { entry: null, data: null, dirty: false, timer: null, flushing: null, downed: new Set(), base: new Map(), levels: new Map(), quests: new Map(), travel: null, rolls: new Set(), combats: new Set(), coalescer: null, coalesceTimer: null, time: new M.TimeTotal(), npcTimer: null };
+const R = { entry: null, data: null, dirty: false, timer: null, flushing: null, downed: new Set(), base: new Map(), levels: new Map(), quests: new Map(), travel: null, rolls: new Set(), combats: new Set(), coalescer: null, coalesceTimer: null, time: new M.TimeTotal(), npcTimer: null,
+  // 0.5.0: quest lines logged lately (journal flag and toolkit hook report the same change), journeys (hook vs Travel Log line).
+  questsSeen: new M.Recent({ window: 15000 }), journeys: new M.Merge({ window: 15000, delay: 2500 }) };
 
 // ---------------------------------------------------------------- reading
 export const isSessionEntry = j => !!j?.flags?.[ID]?.session;
@@ -92,7 +94,7 @@ function baseline() {
   }
   R.quests.clear();
   if (game.modules.get(TK)?.active) {
-    for (const j of game.journal) { const q = j.flags?.[TK]?.quest; if (q) R.quests.set(j.id, M.questState(j.name, q)); }
+    for (const j of game.journal) { const q = questData(j); if (q) R.quests.set(j.id, M.questState(j.name, q)); }
     R.travel = travelLogPage()?.text?.content ?? "";
   }
   R.met = new Set(R.data?.met ?? []);
@@ -200,6 +202,7 @@ function load(entry) {
   R.entry = entry; R.data = dataOf(entry); R.dirty = false;
   R.coalescer = new M.Coalescer({ quiet: (Number(get("coalesceSeconds")) || 8) * 1000 });
   R.time.clear(); R.rolls = new Set(R.data.events.map(e => e.data?.msg).filter(Boolean)); R.combats.clear();
+  R.questsSeen = new M.Recent({ window: 15000 }); R.journeys = new M.Merge({ window: 15000, delay: 2500 });
   baseline();
   log("session loaded on the leader", entry.name);
 }
@@ -312,22 +315,87 @@ function onDocHooks() {
   Hooks.on("userConnected", user => { if (recording() && !user.isGM) scanSoon(); });
 }
 
-/** The companion toolkit: its quests (journal flags), Travel Log page and loot roll cards. Read only. */
+/**
+ * A quest's data: the toolkit's API on a GM (the full quest from its GM-only store, hidden objectives included), else the journal's
+ * flag (the players' view since toolkit 1.27). null when it isn't a quest.
+ */
+function questData(j) {
+  if (!j?.flags?.[TK]?.quest) return null;
+  try { const q = game.user?.isGM ? game.modules.get(TK)?.api?.quests?.get?.(j.id) : null; if (q && typeof q === "object") return q; } catch { }
+  return j.flags[TK].quest;
+}
+
+/**
+ * Logs a quest's changes since Red Book last read it (quest events feature). Both the journal update and the toolkit's
+ * `wayfarersToolkit.questUpdated` hook call this; whichever comes first logs, and a line already logged within 15 s (same quest, same
+ * change, same objective) is skipped. Hidden quests and hidden objectives are logged as GM-only lines (kept out of the recap).
+ * `change`: the hook's change, used only when the quest data shows no change the hook says happened.
+ */
+function questChanged(j, change = "") {
+  if (!recording() || !j) return;
+  const q = questData(j); if (!q) return;
+  const after = M.questState(j.name, q); const before = R.quests.get(j.id) ?? null; R.quests.set(j.id, after);
+  const events = M.diffQuest(before ?? (after.status !== "available" ? { status: "available", done: after.done, objectives: {}, name: after.name, hidden: after.hidden } : null), after);
+  if (!events.length && change) { const f = M.questFallback(change, after); if (f) events.push(f); }
+  const now = Date.now();
+  for (const e of events) {
+    const key = M.questKey(j.id, e);
+    if (key && R.questsSeen.seen(key, now)) continue;
+    if (key) R.questsSeen.mark(key, now);
+    record(e.type, e.text, { refs: [j.uuid], data: { ...e.data, quest: j.id }, private: !!e.private });
+  }
+}
+
+/** The toolkit's quest hook (ids only): `{ questId, change }`. Read defensively: the hook may not exist in the toolkit installed. */
+function onQuestHook(payload) {
+  const p = M.readQuestHook(payload); if (!p) return;
+  // Heard on another GM tab: relay it (a change kept only in the toolkit's GM-only store updates no journal the recording tab sees).
+  if (!L.isLeader()) { if (game.user?.isGM && openEntry()) L.request("quest", p); return; }
+  questChanged(game.journal.get(p.questId), p.change);
+}
+
+/**
+ * The toolkit's journey hook: a hex trip or a flight, logged as a Travel line. The Travel Log page gets a line for the same trip; the
+ * one from the hook wins (it has hours and cost) and the page's line is skipped when they come within 15 s of each other.
+ */
+function onJourneyHook(payload) {
+  const j = M.readJourney(payload); if (!j) return;
+  // Heard on another GM tab (the toolkit ran the trip there): relay it to the recording tab. Players' clients don't.
+  if (!L.isLeader()) { if (game.user?.isGM && openEntry()) L.request("journey", journeyRequest(j)); return; }
+  logJourney(j);
+}
+/** The relay payload: the hook's fields, read and clipped by readJourney (nothing else). */
+const journeyRequest = j => ({ kind: j.kind, fromId: j.fromId, toId: j.toId, fromName: j.fromName, toName: j.toName, hours: j.hours, cost: { ...j.cost }, partyId: j.partyId });
+function logJourney(j) {
+  if (!recording()) return;
+  const e = M.journeyEvent(j); if (!e) return;
+  if (!R.journeys.primary(M.journeyKind(j), Date.now())) return;
+  record(e.type, e.text, { data: e.data });
+}
+/** A Travel Log line: logged at once when the journey hook isn't listened to; else after a short wait unless the hook reported it. */
+function travelLine(e) {
+  if (!F.on("journeys")) { record(e.type, e.text, { data: e.data }); return; }
+  const kind = e.data?.kind === "flight" ? "flight" : e.data?.kind === "travel" ? "travel" : "";
+  if (!kind) { record(e.type, e.text, { data: e.data }); return; }
+  const at = Date.now();
+  if (R.journeys.secondary(kind, at) === "skip") return;
+  setTimeout(() => { if (recording() && R.journeys.settle(kind, at)) record(e.type, e.text, { data: e.data }); }, R.journeys.delay);
+}
+
+/** The companion toolkit: its quests (journal flags and hook), journeys (hook), Travel Log page and loot roll cards. Read only. */
 function toolkitHooks() {
+  // The toolkit's hooks are listened to even if it isn't active yet: they fire only when it is. Ids and display names only.
+  if (F.on("questEvents")) Hooks.on(M.TOOLKIT_HOOKS.questUpdated, onQuestHook);
+  if (F.on("journeys")) Hooks.on(M.TOOLKIT_HOOKS.journey, onJourneyHook);
   if (!game.modules.get(TK)?.active) return;
-  const quest = j => {
-    if (!recording()) return;
-    const q = j.flags?.[TK]?.quest; if (!q) return;
-    const after = M.questState(j.name, q); const before = R.quests.get(j.id) ?? null; R.quests.set(j.id, after);
-    if (after.hidden) return;
-    for (const e of M.diffQuest(before ?? (after.status !== "available" ? { status: "available", done: after.done } : null), after)) record(e.type, e.text, { refs: [j.uuid], data: e.data });
-  };
-  Hooks.on("createJournalEntry", quest);
-  Hooks.on("updateJournalEntry", (j, changes) => { if (hasProp(changes, `flags.${TK}.quest`)) quest(j); });
+  if (F.on("questEvents")) {
+    Hooks.on("createJournalEntry", j => { if (j.flags?.[TK]?.quest) questChanged(j); });
+    Hooks.on("updateJournalEntry", (j, changes) => { if (hasProp(changes, `flags.${TK}.quest`)) questChanged(j); });
+  }
   Hooks.on("updateJournalEntryPage", (page, changes) => {
     if (!recording() || page.name !== "Travel Log" || !hasProp(changes, "text.content")) return;
     const now = page.text.content ?? ""; const was = R.travel ?? ""; R.travel = now;
-    for (const e of M.travelLogAdditions(was, now)) record(e.type, e.text, { data: e.data });
+    for (const e of M.travelLogAdditions(was, now)) travelLine(e);
   });
   Hooks.on("updateChatMessage", (msg, changes) => {
     if (!recording() || !hasProp(changes, `flags.${TK}.lootRoll`) || R.rolls.has(msg.id)) return;
@@ -371,6 +439,8 @@ export function ready() {
     record("note", n.text, { thread: n.thread, private: n.private, data: { by: user.name } });
   });
   L.handle("log", (d, user) => { if (user?.isGM) record(String(d.type), String(d.text ?? ""), { refs: d.refs ?? [], private: !!d.private }); });
+  if (F.on("questEvents")) L.handle("quest", (d, user) => { if (user?.isGM) { const p = M.readQuestHook(d); if (p) questChanged(game.journal.get(p.questId), p.change); } });
+  if (F.on("journeys")) L.handle("journey", (d, user) => { if (user?.isGM) { const j = M.readJourney(d); if (j) logJourney(j); } });
   L.handle("rest", (d, user) => {
     if (!user) return;
     /** @type {any} */ let a = null; try { a = fromUuidSync(d.uuid, { strict: false }); } catch { }

@@ -3,10 +3,11 @@
  * entry whose default ownership is None, instead of in a world setting (every client receives every world setting). Today it holds
  * the next-session board's pins; `migrated` records the one-time move of the old `boardPins` world setting.
  *
- * Shape (STORE_VERSION 1): { v: 1, pins: { v, pins: [...] } (board-model normalizePins), migrated: { boardPins?: number (ms) } }.
+ * Shape (STORE_VERSION 1): { v: 1, pins: { v, pins: [...] } (board-model normalizePins), migrated: { boardPins?: number (ms) },
+ * todos: [...] (0.5.0, board-model normalizeTodos: scene-check findings sent to the board; an older store reads as an empty list) }.
  */
 import { versioned } from "../vendor/wanderers-core/index.mjs";
-import { normalizePins } from "./board-model.mjs";
+import { normalizePins, normalizeTodos } from "./board-model.mjs";
 
 export const STORE_VERSION = 1;
 /** Name of the store journal (GM only; found by its flag, not its name). */
@@ -14,12 +15,13 @@ export const STORE_NAME = "Red Book data (GM only)";
 
 export const normalizeStore = versioned({
   version: STORE_VERSION,
-  empty: () => ({ v: STORE_VERSION, pins: normalizePins(null), migrated: {} }),
+  empty: () => ({ v: STORE_VERSION, pins: normalizePins(null), migrated: {}, todos: [] }),
   // v0: anything stored before the version field existed is read as the same fields, unchecked.
   upgrades: { 0: old => ({ ...old }) },
   clean: s => ({
     v: STORE_VERSION,
     pins: normalizePins(s?.pins),
+    todos: normalizeTodos(s?.todos),
     migrated: Object.fromEntries(Object.entries(s?.migrated && typeof s.migrated === "object" ? s.migrated : {}).filter(([, t]) => Number.isFinite(Number(t))).map(([k, t]) => [k, Number(t)]))
   })
 });

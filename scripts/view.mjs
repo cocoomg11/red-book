@@ -92,7 +92,8 @@ export const FILTERS = Object.freeze({
   combat: ["combatStart", "combatEnd", "down", "death"],
   loot: ["loot", "lootRoll"],
   world: ["rest", "time", "journal", "npc", "level"],
-  quests: ["quest", "objective", "travel"],
+  quests: ["quest", "objective"],
+  travel: ["travel"],
   notes: ["note"]
 });
 /** Rows the dashboard timeline shows at most. */

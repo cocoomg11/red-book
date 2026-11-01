@@ -77,3 +77,40 @@ export function addPin(store, pin, max = PINS_MAX) {
   return { v: PINS_VERSION, pins: pins.slice(0, Math.max(1, max)), added: true, dropped: Math.max(0, pins.length - max) };
 }
 export function removePin(store, uuid) { const s = normalizePins(store); return { v: PINS_VERSION, pins: s.pins.filter(p => p.uuid !== uuid) }; }
+
+// ---------------------------------------------------------------- prep list (0.5.0): scene-check findings sent to the board
+export const TODOS_MAX = 100;
+/**
+ * Reads the stored prep list into [{ id, sceneId, sceneUuid, sceneName, text, severity, at }], newest first, without repeats (by id),
+ * at most TODOS_MAX. `id` is "<sceneId>|<finding key or text>", so the same finding sent twice stays one item.
+ * @param {any} raw
+ */
+export function normalizeTodos(raw) {
+  const list = Array.isArray(raw) ? raw : Array.isArray(raw?.items) ? raw.items : [];
+  /** @type {{ id: string, sceneId: string, sceneUuid: string, sceneName: string, text: string, severity: string, at: number }[]} */
+  const out = [];
+  for (const x of list) {
+    if (!x || typeof x !== "object" || !x.id || out.some(o => o.id === String(x.id))) continue;
+    out.push({ id: String(x.id).slice(0, 300), sceneId: String(x.sceneId ?? ""), sceneUuid: String(x.sceneUuid ?? ""), sceneName: String(x.sceneName ?? "").slice(0, 200),
+      text: String(x.text ?? "").slice(0, 500), severity: ["problem", "warning", "note"].includes(x.severity) ? x.severity : "warning", at: Number(x.at) || 0 });
+  }
+  return out.slice(0, TODOS_MAX);
+}
+/** The prep-list id of a finding on a scene. */
+export const todoId = (sceneId, f) => `${sceneId}|${f?.key || String(f?.text ?? "").slice(0, 200)}`;
+/** Whether a finding counts as a failure ("Add all failures"): a problem or a warning. */
+export const isFailure = f => f?.severity === "problem" || f?.severity === "warning";
+/**
+ * Adds findings of one scene (`scene`: { id, uuid, name }) to the prep list. A finding already on the list is left where it is.
+ * Returns { items, added } (`added`: how many were new). The list keeps its cap: the oldest items go first.
+ */
+export function addTodos(items, scene, findings = [], now = Date.now(), max = TODOS_MAX) {
+  const list = normalizeTodos(items); const have = new Set(list.map(i => i.id)); const fresh = [];
+  for (const f of findings) {
+    if (!f || !scene?.id) continue;
+    const id = todoId(scene.id, f); if (have.has(id)) continue; have.add(id);
+    fresh.push({ id, sceneId: String(scene.id), sceneUuid: String(scene.uuid ?? `Scene.${scene.id}`), sceneName: String(scene.name ?? ""), text: String(f.text ?? ""), severity: f.severity, at: now });
+  }
+  return { items: normalizeTodos([...fresh.reverse(), ...list]).slice(0, Math.max(1, max)), added: fresh.length };
+}
+export const removeTodo = (items, id) => normalizeTodos(items).filter(i => i.id !== id);

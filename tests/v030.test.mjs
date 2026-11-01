@@ -73,7 +73,7 @@ test("scene check skips the toolkit's map pins", () => {
 
 // ---------------------------------------------------------------- GM-only store and the pin move
 test("store: versioned, empty for junk, pins capped", () => {
-  assert.deepEqual(St.normalizeStore(null), { v: 1, pins: { v: 1, pins: [] }, migrated: {} });
+  assert.deepEqual(St.normalizeStore(null), { v: 1, pins: { v: 1, pins: [] }, migrated: {}, todos: [] });
   assert.deepEqual(St.normalizeStore({ v: 99, pins: [] }).pins.pins, [], "a newer shape isn't trusted");
   const many = Array.from({ length: 80 }, (_, i) => ({ uuid: `Actor.a${i}` }));
   assert.equal(St.normalizeStore({ v: 1, pins: { pins: many } }).pins.pins.length, 50);
