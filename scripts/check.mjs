@@ -27,7 +27,7 @@ export function sceneFacts(scene) {
   const tokens = scene.tokens.map(t => {
     const a = t.actor; const pc = !!(a && (a.hasPlayerOwner || a.type === "character"));
     return {
-      id: t.id, uuid: t.uuid, name: t.name, img: t.texture?.src ?? "", actorExists: !!a && (!t.actorId || !!game.actors.get(t.actorId) || !t.actorLink),
+      id: t.id, uuid: t.uuid, name: t.name, img: t.texture?.src ?? "", actorExists: !!a && (!t.actorId || !!game.actors.get(t.actorId)),
       actorId: t.actorId, actorUuid: a?.uuid ?? "", actorType: a?.type ?? "", pc, linked: !!t.actorLink, sight: !!t.sight?.enabled,
       hpMax: a?.system?.attributes?.hp?.max ?? null, cr: a?.system?.details?.cr ?? null
     };
