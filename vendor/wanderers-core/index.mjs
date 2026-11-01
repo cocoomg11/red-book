@@ -24,3 +24,4 @@ export {
   SCENE_TAB_GLOBAL, SCENE_TAB_VERSION, SCENE_TAB_ID, SCENE_TAB_LABEL, SCENE_TAB_ICON, defineSection, orderSections, upsertSection, ownField,
   createRegistry, usableRegistry, claimRegistry
 } from "./scene-tab-model.mjs";
+export { UI_REVISION, UI_CLASSES, UI_STYLESHEET, TONES, tone, icon, badge, dot, statusLine, statusLines, navItem } from "./ui-model.mjs";

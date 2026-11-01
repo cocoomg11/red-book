@@ -25,6 +25,7 @@
     "scripts/main.mjs"
   ],
   "styles": [
+    "vendor/wanderers-core/styles/wanderers-ui.css",
     "styles/red-book.css"
   ],
   "socket": true,

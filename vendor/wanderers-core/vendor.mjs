@@ -95,8 +95,9 @@ export function readTree(dir) {
 }
 
 /**
- * What goes into a module from a core checkout: src/** (at the top of the vendored folder), config/**, tools/vendor.mjs (as
- * vendor.mjs) and LICENSE. Text normalised to LF.
+ * What goes into a module from a core checkout: src/** (at the top of the vendored folder, so src/styles/wanderers-ui.css ships
+ * as vendor/wanderers-core/styles/wanderers-ui.css, which Foundry loads from a module.json `styles` entry), config/**,
+ * tools/vendor.mjs (as vendor.mjs) and LICENSE. Text normalised to LF.
  * @param {string} coreRoot
  * @returns {FileMap}
  */

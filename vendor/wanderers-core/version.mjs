@@ -3,7 +3,7 @@
  */
 
 /** The version of this copy of wanderers-core. The test suite checks it equals package.json. */
-export const CORE_VERSION = "0.2.0";
+export const CORE_VERSION = "0.3.0";
 
 /**
  * @typedef {{ parts: number[], pre: string }} ParsedVersion

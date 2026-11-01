@@ -1,6 +1,6 @@
 # CLAUDE.md: Red Book
 
-Foundry VTT module (v13 minimum, verified v14 build 369; any system, extra dnd5e 6.x support) that cuts GM prep: session log, next-session board, scene readiness check, Session Start, Who's online. Built on **wanderers-core 0.2.0** (vendored in `vendor/wanderers-core/`, pinned by `wanderers-core.lock.json`; never edit it by hand: `node vendor/wanderers-core/vendor.mjs update X.Y.Z`; core's CONVENTIONS.md applies). Logic only; campaign content stays in each world. Public repo, MIT.
+Foundry VTT module (v13 minimum, verified v14 build 369; any system, extra dnd5e 6.x support) that cuts GM prep: session log, next-session board, scene readiness check, Session Start, Who's online. Built on **wanderers-core 0.3.0** (vendored in `vendor/wanderers-core/`, pinned by `wanderers-core.lock.json`; never edit it by hand: `node vendor/wanderers-core/vendor.mjs update X.Y.Z`; core's CONVENTIONS.md applies). Logic only; campaign content stays in each world. Public repo, MIT.
 
 ## File map (`scripts/`)
 - `main.mjs` entry: settings, menus, scene-control buttons, header/context hooks, the API (`game.modules.get("red-book").api`), the leader's one-time GM work (`migrate.mjs`).
@@ -35,7 +35,7 @@ Foundry VTT module (v13 minimum, verified v14 build 369; any system, extra dnd5e
 - **Docs:** README *Public API and hooks* lists every `api.*` entry and hook, marked stable or experimental. Update it with any change.
 
 ## Tests
-- `npm test` = `node --test tests/*.test.mjs`; `npm run check` syntax-checks scripts and tests; `npm run lint` (core's ESLint config; passes; in CI, with eslint 10.13.0 + typescript 7.0.2 as devDependencies and a committed `package-lock.json`); `npm run types` (JSDoc via tsc; off in CI, `types: false`, until the older files are clean). CI is core's reusable `module-checks.yml@v0.2.0` (pin check, syntax, lint, tests); the Release workflow runs the tests and `verify --remote` again.
+- `npm test` = `node --test tests/*.test.mjs`; `npm run check` syntax-checks scripts and tests; `npm run lint` (core's ESLint config; passes; in CI, with eslint 10.13.0 + typescript 7.0.2 as devDependencies and a committed `package-lock.json`); `npm run types` (JSDoc via tsc; off in CI, `types: false`, until the older files are clean). CI is core's reusable `module-checks.yml@v0.3.0` (pin check, syntax, lint, tests); the Release workflow runs the tests and `verify --remote` again.
 - Leader election and request reading are tested in core. Pure and tested here: request schemas, hook payloads (ids only), GM-only gate, session model (caps, coalescing, inventory, time, HP/level transitions, NPCs met, toolkit readers, summary, timeline), recap stripping, board links and pins, the store and pin move, every readiness rule and the toolkit pin filter, path cache, settings table, cleanup plan, features, Who's online model, Session Start scene list, toolkit carry-over plan.
 - Not testable in Node: hooks, sockets, ApplicationV2 windows, journal writes, HEAD probes. List what's untested in the changelog's live checklist.
 
