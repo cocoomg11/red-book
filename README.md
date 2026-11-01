@@ -8,7 +8,7 @@ A Foundry VTT module (v13 and v14, any game system, extra support for dnd5e) tha
 - **Session Start**: pick the scene, activate it, unpause and start the log in one step.
 - **Who's online**: a small panel on Hub scenes that says when everyone's here; it can be moved and folded.
 - **0.6.0**: a *Previously on…* title card for players at Session Start, NPCs met (with remove), a session timer and optional break reminder, attendance with experience or milestones (totals per character), *Gained this session* coin and items, and full dates on every log line, so sessions that run past midnight read correctly.
-- **0.5.0**: quest progress and journeys from Wayfarer's Toolkit in the log and the recap, a prep list on the board fed by the scene check, a *Next session* date, an *Open Red Book* key binding, and optional Discord posts (off by default).
+- **0.5.0**: quest progress and journeys from Wanderer's Toolkit in the log and the recap, a prep list on the board fed by the scene check, a *Next session* date, an *Open Red Book* key binding, and optional Discord posts (off by default).
 
 Every tool can be turned off. A turned-off tool registers nothing. With **Wanderer's Satchel** installed, Red Book also shows up in its hub (control panel, health check, debug logging).
 
@@ -48,10 +48,10 @@ Every tool can be turned off. A turned-off tool registers nothing. With **Wander
 | NPCs met this session | `npcsMet` | (0.6.0; needs the session log) Non-player tokens that appear on the active scene, or on a scene a connected player is viewing, while a session runs are recorded once each (actor id, name, first seen, scene): **Met** lines on the timeline, an *NPCs met* panel on the Session page and an *NPCs met* list in the recap. Hidden tokens count once revealed. Take one out (a hidden ambusher) with its remove button: it leaves the list and the Met line, and isn't added again that session. |
 | Session timer and break reminder | `sessionTimer` | (0.6.0; needs the session log) Elapsed time (hours:minutes, from the start timestamp) on the Session page's *Played* tile and live banner. *Remind me to take a break* (off by default) shows a GM-only notification every *N* minutes (default 90). |
 | Attendance and experience | `attendance` | (0.6.0; needs the session log) Who was at the table each session (connected players and their characters, added automatically; add or take out by hand) and, by the *Track per session* setting, experience points per character (GM only) or a milestone line (players see it in the recap), or neither. Past sessions shows them per session and totals per character. |
-| Gained this session | `gained` | (0.6.0; needs the session log) A *Gained this session* block in the log and the recap: the party's net coin (g/s/c, with what was spent) from Wayfarer's Toolkit's coin log within the session's start and end times, or from the log's own item and coin lines when the coin log isn't there, plus reward items of quests completed this session (hidden quests left out). Frozen when the session ends. |
+| Gained this session | `gained` | (0.6.0; needs the session log) A *Gained this session* block in the log and the recap: the party's net coin (g/s/c, with what was spent) from Wanderer's Toolkit's coin log within the session's start and end times, or from the log's own item and coin lines when the coin log isn't there, plus reward items of quests completed this session (hidden quests left out). Frozen when the session ends. |
 | Scene readiness check | `sceneCheck` | A read-only audit of a scene, a folder or every scene: missing images and sounds, walls and doors, lights, token vision and links, NPC stats, map notes, linked journals, active tile actions and player characters. Each finding has a button that opens the thing to fix. GM only. |
 
-Optional: with **Wayfarer's Toolkit** active, its quests feed the board and its quests, objectives, travel, flights and loot rolls are logged too (its map pins are left out of the scene check). With **Monk's Active Tiles** active, tile actions that point at deleted documents are reported.
+Optional: with **Wanderer's Toolkit** active, its quests feed the board and its quests, objectives, travel, flights and loot rolls are logged too (its map pins are left out of the scene check). With **Monk's Active Tiles** active, tile actions that point at deleted documents are reported.
 
 ## Quick start
 
@@ -78,7 +78,7 @@ Optional: with **Wayfarer's Toolkit** active, its quests feed the board and its 
   - journals and pages shown to players;
   - NPCs met: non-player actors with a visible token on the active scene (0.6.0, feature `npcsMet`: or a scene a connected player is viewing) while a player is connected, once per session;
   - level-ups (dnd5e: total level; other systems: `system.details.level` when present);
-  - Wayfarer's Toolkit: quests given, completed, failed, reopened, objectives ticked, flights and hex travel (from its Travel Log page), finished loot rolls.
+  - Wanderer's Toolkit: quests given, completed, failed, reopened, objectives ticked, flights and hex travel (from its Travel Log page), finished loot rolls.
 - **End session** adds a **summary** at the top: how long you played and how much in-world time passed, counts per kind, notable moments (kills, level-ups, quests, combats) and open threads (GM-only threads in a secret block).
 - **Quest events and journeys (0.5.0)**: with the toolkit, quest lines and Travel lines come from its quest journals and its hooks (see [Integrations](#integrations)); each change is logged once. Quest lines get their own *Quests* list in the summary, so they show in the recap (except GM-only ones). The timeline has *Quests* and *Travel* filter chips.
 - **Dates and times (0.6.0)**: every line stores its full time (`t` in ms and `at`, an ISO 8601 UTC string). The Red Book window shows each line's time in **your own time zone**, with the date in front of lines from a later day than the session's start and a day separator where the timeline crosses midnight. The session's span reads *Sat 14 Mar, 7:00 PM – Sun 15 Mar, 1:30 AM* on the Session page, Past sessions, the journal page and the recap. The session's name and number keep the start date. Durations and "this session" windows (time played, gained this session, the break reminder) come from timestamps, so they stay right across midnight and daylight-saving changes. The journal page is written by the recording GM's browser, in that GM's time zone. Lines logged before 0.6.0 get a full time on the first GM load: the session's start date plus the line's clock reading, moving to the next day whenever the clock goes backwards. Turn the dates off with *Dates on the timeline* (Advanced).
@@ -90,7 +90,7 @@ Optional: with **Wayfarer's Toolkit** active, its quests feed the board and its 
 
 Open it with the thumbtack button in the token controls, the Red Book window's **Board** page or `api.board.open()`. Three columns: quests and the last session; NPCs, journals and scenes; your pins.
 
-- **Active quests** (Wayfarer's Toolkit's quest log, when that module is active) with their next unticked objectives.
+- **Active quests** (Wanderer's Toolkit's quest log, when that module is active) with their next unticked objectives.
 - **NPCs, Journals, Scenes**: every document linked from those quests (giver, description, objectives), with the quests that link it. Deleted documents are shown struck through.
 - **Last session**: its counts, notable moments and open threads.
 - **Pinned**: drop actors, journals, pages, scenes, roll tables, items, playlists or macros on it (up to 50). Click × to unpin.
@@ -140,12 +140,12 @@ Click the flag button in the token controls (GM), **Session Start…** on the Re
 - **Moving it**: drag the panel by its header. Each browser keeps its own spot, always on screen. Double-click the header to put it back where the *Panel position* setting says.
 - **Folding it**: the arrow button in the header (or Tab to it and press Enter or Space) folds the panel to its header, which still shows the count (for example 3/4). Each browser remembers its choice.
 - The Red Book window's **Online** page, its *Open as a window* button (or `api.online.open()`) opens the same board as a window, for anyone.
-- **Hooks for world scripts**: `red-book.playerCountChanged` fires whenever the count changes, and `red-book.allPlayersOnline` when everyone's here. They fire on every client, so a script that changes documents should check `game.users.activeGM?.isSelf`. Scripts written for Wayfarer's Toolkit keep working: the old names `wayfarers-toolkit.playerCountChanged` / `.allPlayersOnline` fire too, unless the toolkit still has its own Who's online (then the toolkit fires them) or you turn off *Also fire the old hook names*.
-- **Moving from Wayfarer's Toolkit**: on the GM's first load of 0.3.0, Red Book copies the toolkit's Who's online and Session Start settings and its Hub scene ticks. The toolkit's own data stays as it was. Turn the toolkit's copies of these tools off so you don't get two panels.
+- **Hooks for world scripts**: `red-book.playerCountChanged` fires whenever the count changes, and `red-book.allPlayersOnline` when everyone's here. They fire on every client, so a script that changes documents should check `game.users.activeGM?.isSelf`. Scripts written for Wanderer's Toolkit keep working: the old names `wayfarers-toolkit.playerCountChanged` / `.allPlayersOnline` fire too, unless the toolkit still has its own Who's online (then the toolkit fires them) or you turn off *Also fire the old hook names*.
+- **Moving from Wanderer's Toolkit**: on the GM's first load of 0.3.0, Red Book copies the toolkit's Who's online and Session Start settings and its Hub scene ticks. The toolkit's own data stays as it was. Turn the toolkit's copies of these tools off so you don't get two panels.
 
 ## Integrations
 
-Red Book listens to two hooks from **Wayfarer's Toolkit** (when a toolkit version that fires them is active; older versions simply don't fire them and Red Book falls back to reading the quest journals and the Travel Log page). Both are fired with `Hooks.callAll` and carry ids and display strings only. Only the recording GM tab logs; another GM tab that hears them sends them on (GM-only, schema-checked requests); players' clients ignore them.
+Red Book listens to two hooks from **Wanderer's Toolkit** (when a toolkit version that fires them is active; older versions simply don't fire them and Red Book falls back to reading the quest journals and the Travel Log page). Both are fired with `Hooks.callAll` and carry ids and display strings only. Only the recording GM tab logs; another GM tab that hears them sends them on (GM-only, schema-checked requests); players' clients ignore them.
 
 | Hook | Payload | What Red Book does |
 |---|---|---|

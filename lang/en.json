@@ -78,7 +78,7 @@
       "pinned": "Pinned",
       "threads": "Open threads",
       "noThreads": "None.",
-      "noToolkit": "Active quests come from Wayfarer's Toolkit's quest log when that module is active.",
+      "noToolkit": "Active quests come from {name}'s quest log when that module is active.",
       "noQuests": "No active quests.",
       "noSession": "No session logged yet.",
       "noNpcs": "No NPCs linked from active quests.",

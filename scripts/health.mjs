@@ -5,7 +5,7 @@
  */
 import { healthCollector } from "../vendor/wanderers-core/index.mjs";
 import { sceneTab } from "../vendor/wanderers-core/foundry/index.mjs";
-import { ID, TOOLKIT_ID, MATT_ID } from "./const.mjs";
+import { ID, TOOLKIT_ID, MATT_ID, toolkitTitle, toolkitHealthText } from "./const.mjs";
 import { F, L, get } from "./core.mjs";
 import { webhookOk } from "./discord-model.mjs";
 
@@ -18,7 +18,7 @@ export function report(deps = {}) {
     else add(i.leader ? "ok" : "info", i.leader ? `This tab records (${i.sessions} tab${i.sessions === 1 ? "" : "s"} of yours open).` : `Another of your tabs records (${i.sessions} open).`);
   });
   h.check(add => add("info", `System: ${game.system.id}${game.system.id === "dnd5e" ? " (rests, NPC stats and level-ups supported)" : " (rests, CR checks and dnd5e level-ups are skipped)"}.`));
-  h.check(add => { const on = !!game.modules.get(TOOLKIT_ID)?.active; add(on ? "ok" : "info", on ? "Wayfarer's Toolkit is active: quests, travel, flights and loot rolls are logged and quests feed the board." : "Wayfarer's Toolkit isn't active: the board shows no quests and its events aren't logged."); });
+  h.check(add => { const on = !!game.modules.get(TOOLKIT_ID)?.active; add(on ? "ok" : "info", toolkitHealthText(on, toolkitTitle())); });
   if (F.on("sessionLog")) h.check(add => {
     const j = deps.session?.openEntry?.();
     add(j ? "ok" : "info", j ? `Session open: ${j.name}.` : "No session is open.");
