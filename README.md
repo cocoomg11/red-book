@@ -7,8 +7,8 @@ A Foundry VTT module (v13 and v14, any game system, extra support for dnd5e) tha
 - **Scene check**: a read-only audit of your scenes before the players see them, scene list on the left, findings on the right.
 - **Session Start**: pick the scene, activate it, unpause and start the log in one step.
 - **Who's online**: a small panel on Hub scenes that says when everyone's here; it can be moved and folded.
-- **0.6.0**: a *Previously on…* title card for players at Session Start, NPCs met (with remove), a session timer and optional break reminder, attendance with experience or milestones (totals per character), *Gained this session* coin and items, and full dates on every log line, so sessions that run past midnight read correctly.
-- **0.5.0**: quest progress and journeys from Wanderer's Toolkit in the log and the recap, a prep list on the board fed by the scene check, a *Next session* date, an *Open Red Book* key binding, and optional Discord posts (off by default).
+- **Session extras**: a *Previously on…* title card for players at Session Start, NPCs met (with remove), a session timer and optional break reminder, attendance with experience or milestones (totals per character), *Gained this session* coin and items, and full dates on every log line, so sessions that run past midnight read correctly.
+- **Toolkit and Discord**: quest progress and journeys from Wanderer's Toolkit in the log and the recap, a prep list on the board fed by the scene check, a *Next session* date, an *Open Red Book* key binding, and optional Discord posts (off by default).
 
 Every tool can be turned off. A turned-off tool registers nothing. With **Wanderer's Satchel** installed, Red Book also shows up in its hub (control panel, health check, debug logging).
 
@@ -23,7 +23,7 @@ Every tool can be turned off. A turned-off tool registers nothing. With **Wander
 - [How to use: Scene readiness check](#scene-readiness-check)
 - [How to use: Session Start](#session-start)
 - [How to use: Who's online](#whos-online)
-- [Control panel and settings](#control-panel-and-settings)
+- [Control panel and settings](#the-red-book-window-and-settings)
 - [Integrations (toolkit hooks)](#integrations)
 - [Discord posts](#discord-posts)
 - [Several GMs or several tabs](#several-gms-or-several-tabs)

@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.6.0 (unreleased)
+## 0.6.0 (2026-11-01)
 
 Five new features, each with its own switch on the Features page (all on by default, all need the session log), and full dates on every log line.
 
@@ -50,7 +50,7 @@ Unit tests (138, passing in UTC, New York and Tokyo time zones) cover the time m
 - [ ] With the toolkit's coin log on: pay a quest reward and a room during the session; end it: the block shows the net coin and what was spent, and the quest's reward items. An undone entry isn't counted. Without the toolkit: coin from the log's own loot lines.
 
 
-## 0.5.0 (unreleased)
+## 0.5.0 (2026-11-01)
 
 Five new features, each with its own switch on the Features page (four on by default, Discord posts off).
 
