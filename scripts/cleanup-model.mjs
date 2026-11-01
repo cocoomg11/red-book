@@ -7,7 +7,7 @@ export const CATEGORIES = [
   ["sessions", "Session log journals (the GM-only timelines and their notes pages)", false],
   ["recaps", "Player recap journals made by Share as recap", false],
   ["reports", "Scene check report journals", true],
-  ["flags", "Red Book flags on other documents (they stay; only our flags go)", true],
+  ["flags", "Red Book flags on other documents, including ignored scene-check findings (the documents stay; only our flags go)", true],
   ["folders", "Folders Red Book made, once empty", true],
   ["settings", "Reset Red Book's settings to defaults (feature toggles, pins; reloads)", false]
 ];

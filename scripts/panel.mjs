@@ -51,7 +51,8 @@ export class ControlPanel extends foundry.applications.api.ApplicationV2 {
       <footer class="form-footer"><button type="submit"><i class="fa-solid fa-floppy-disk"></i> Save changes</button></footer>`;
     const off = t.feature && !F.on(t.feature);
     const { basic, advanced } = S.tabRows(t.id);
-    const extra = t.id === "data" ? `<div class="rb-buttons"><button type="button" data-run="cleanup"><i class="fa-solid fa-broom"></i> Remove Red Book data…</button></div>` : "";
+    const extra = t.id === "data" ? `<div class="rb-buttons"><button type="button" data-run="cleanup"><i class="fa-solid fa-broom"></i> Remove Red Book data…</button></div>`
+      : t.id === "check" && !off ? `<div class="rb-buttons"><button type="button" data-run="clearIgnored"><i class="fa-solid fa-eraser"></i> Clear all ignored warnings…</button></div><p class="hint">Stops ignoring every finding you ignored in the readiness window, on every scene (asks first).</p>` : "";
     return `<h2>${esc(t.label)}</h2>${off ? `<p class="rb-warn"><i class="fa-solid fa-power-off"></i> This tool is turned off (Features tab).</p>` : ""}
       ${basic.map(s => rowHTML(s, off)).join("")}
       ${advanced.length ? `<details class="rb-advanced"><summary>Advanced</summary>${advanced.map(s => rowHTML(s, off)).join("")}</details>` : ""}
@@ -66,6 +67,7 @@ export class ControlPanel extends foundry.applications.api.ApplicationV2 {
       if (r === "start") deps.session?.start(); else if (r === "end") await deps.session?.end();
       else if (r === "note") deps.session?.noteDialog(); else if (r === "recap") deps.session?.shareRecap();
       else if (r === "board") deps.board?.open(); else if (r === "check") deps.check?.chooser(); else if (r === "cleanup") deps.cleanup?.open();
+      else if (r === "clearIgnored") await deps.check?.clearAllIgnored?.();
       setTimeout(() => this.rendered && this.render(), 800);
     }));
     this.element.onsubmit = ev => { ev.preventDefault(); this.#save(); };

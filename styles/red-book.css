@@ -39,5 +39,7 @@
 .rb-findings li { display: flex; gap: 6px; align-items: center; padding: 2px 0; } .rb-findings .rb-text { flex: 1; }
 .rb-findings button { width: 28px; flex: 0 0 auto; }
 .rb-sev { font-size: 11px; text-transform: uppercase; width: 64px; flex: 0 0 auto; }
+.rb-ignored-list { margin: 4px 0 4px 8px; } .rb-ignored-list summary { cursor: pointer; color: var(--rb-muted); }
+.rb-findings li.rb-ignored { opacity: 0.7; } .rb-clear-ignored { margin: 4px 0; } .rb-clear-ignored button { width: auto; }
 .rb-problem .rb-sev { color: var(--rb-bad); } .rb-warning .rb-sev { color: var(--rb-warn); } .rb-note .rb-sev { color: var(--rb-muted); }
 .rb-review { max-height: 340px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }

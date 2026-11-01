@@ -1,7 +1,8 @@
 /**
  * Scene readiness check (feature "sceneCheck"): read-only. sceneFacts() reads a scene into plain facts, the path cache asks the
  * server whether each file loads, and check-model.mjs turns the facts into findings. A results window lists each scene's findings
- * with a jump-to-fix button; Export writes the report to a GM-only journal. Nothing in the checked scenes is ever changed.
+ * with a jump-to-fix button; Export writes the report to a GM-only journal. Nothing in the checked scenes is ever changed, except
+ * the GM's own list of ignored findings (flags.red-book.ignoredChecks on the scene, written only on a GM's click).
  */
 import { ID, MATT_ID, esc } from "./const.mjs";
 import * as C from "./check-model.mjs";
@@ -45,7 +46,7 @@ export function sceneFacts(scene) {
     notes: scene.notes.map(n => ({ id: n.id, label: n.label || n.entry?.name || "", img: n.texture?.src ?? "", entryId: n.entryId ?? "", entryExists: !!(n.entryId && game.journal.get(n.entryId)), pageId: n.pageId ?? "", pageExists: !!(n.pageId && game.journal.get(n.entryId)?.pages.get(n.pageId)) })),
     playlist: {
       set: !!scene._source?.playlist, exists: !!playlist, soundSet: !!scene._source?.playlistSound, soundExists: !!scene.playlistSound,
-      paths: playlist ? playlist.sounds.map(s => ({ playlistId: playlist.id, playlist: playlist.name, name: s.name, path: s.path ?? "" })) : []
+      paths: playlist ? playlist.sounds.map(s => ({ playlistId: playlist.id, soundId: s.id, playlist: playlist.name, name: s.name, path: s.path ?? "" })) : []
     },
     journal: { set: !!scene._source?.journal, exists: !!scene.journal, pageSet: !!scene._source?.journalEntryPage, pageExists: !!scene.journalEntryPage },
     matt: []
@@ -75,8 +76,44 @@ export async function checkOne(scene) {
   const paths = C.scenePaths(f).filter(p => C.checkable(p, location.origin));
   const res = await cache().checkAll(paths);
   const players = game.users.filter(u => u.active && !u.isGM).map(u => ({ id: u.id, name: u.name, hasCharacter: !!u.character }));
-  const findings = C.checkScene(f, { paths: res, off: offRules(get), players, dnd5e: game.system.id === "dnd5e", matt: !!game.modules.get(MATT_ID)?.active });
-  return { scene: { id: scene.id, uuid: scene.uuid, name: scene.name }, findings, tally: C.tally(findings) };
+  const all = C.checkScene(f, { paths: res, off: offRules(get), players, dnd5e: game.system.id === "dnd5e", matt: !!game.modules.get(MATT_ID)?.active });
+  return C.applyIgnored({ scene: { id: scene.id, uuid: scene.uuid, name: scene.name }, all }, ignoredOf(scene));
+}
+
+// ---------------------------------------------------------------- ignored findings (GM only; stored on the scene)
+const sceneOf = s => (typeof s === "string" ? game.scenes.get(s) : s);
+/** A scene's raw ignore store (normalised by the model). */
+export const ignoredOf = scene => sceneOf(scene)?.getFlag?.(ID, C.IGNORED_FLAG) ?? null;
+async function writeIgnored(scene, store) {
+  if (!store.entries.length) return scene.unsetFlag(ID, C.IGNORED_FLAG);
+  return scene.setFlag(ID, C.IGNORED_FLAG, store);
+}
+/** Ignores one finding (by its key) on a scene. */
+export async function ignore(scene, key) {
+  const s = sceneOf(scene); if (!UI.gmOnly() || !s || !key) return null;
+  return writeIgnored(s, C.addIgnored(ignoredOf(s), String(key), { by: game.user.id, name: game.user.name }));
+}
+/** Stops ignoring one finding on a scene. */
+export async function unignore(scene, key) {
+  const s = sceneOf(scene); if (!UI.gmOnly() || !s || !key) return null;
+  return writeIgnored(s, C.removeIgnored(ignoredOf(s), String(key)));
+}
+/** Wipes a scene's ignored findings. */
+export async function clearIgnored(scene) {
+  const s = sceneOf(scene); if (!UI.gmOnly() || !s) return null;
+  return s.unsetFlag(ID, C.IGNORED_FLAG);
+}
+/** Wipes the ignored findings on every scene (after a confirm unless `confirm: false`). Resolves to the number of scenes cleared, or null. */
+export async function clearAllIgnored({ confirm = true } = {}) {
+  if (!UI.gmOnly()) return null;
+  const ids = C.scenesWithIgnored(game.scenes.map(s => ({ id: s.id, flags: s.flags })));
+  if (!ids.length) { ui.notifications.info("Red Book: no scene has ignored findings."); return 0; }
+  if (confirm && !(await UI.confirm("Clear all ignored warnings", `<p>Stop ignoring every ignored scene-check finding on ${ids.length === 1 ? "1 scene" : `${ids.length} scenes`}? They will count again on the next check.</p>`))) return null;
+  let n = 0;
+  for (const id of ids) { try { await game.scenes.get(id)?.unsetFlag(ID, C.IGNORED_FLAG); n++; } catch (e) { console.warn(`${ID} | clear ignored ${id}`, e); } }
+  ui.notifications.info(`Red Book: ignored findings cleared on ${n === 1 ? "1 scene" : `${n} scenes`}.`);
+  Results.refreshIgnored();
+  return n;
 }
 
 /** Which scenes: { scenes: [uuid | id | Scene], folder: id | Folder, all: true } (default: the viewed scene). */
@@ -98,7 +135,7 @@ export async function run(opts = {}) {
   if (!list.length) { ui.notifications.warn("Red Book: no scenes to check."); return []; }
   const app = Results.instance(); app.results = null; app.label = list.length === 1 ? list[0].name : `${list.length} scenes`; app.render({ force: true });
   const results = [];
-  for (const s of list) { try { results.push(await checkOne(s)); } catch (e) { results.push({ scene: { id: s.id, uuid: s.uuid, name: s.name }, findings: [{ rule: "background", severity: "note", text: `Couldn't check this scene: ${e.message}`, fix: null }], tally: { problem: 0, warning: 0, note: 1 } }); } }
+  for (const s of list) { try { results.push(await checkOne(s)); } catch (e) { results.push({ scene: { id: s.id, uuid: s.uuid, name: s.name }, findings: [{ rule: "background", severity: "note", text: `Couldn't check this scene: ${e.message}`, fix: null, key: "" }], ignored: [], stored: 0, tally: { problem: 0, warning: 0, note: 1 } }); } }
   app.results = results; app.render();
   return results;
 }
@@ -111,7 +148,7 @@ export async function exportReport(results) {
   if (!j) j = await JournalEntry.create({ name: "Scene check", ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE }, flags: { [ID]: { reports: { v: C.REPORT_VERSION } } } });
   const create = [], update = [];
   for (const r of results) {
-    const content = C.reportHTML(r.scene.name, r.findings, when);
+    const content = C.reportHTML(r.scene.name, r.findings, when, r.ignored ?? []);
     const page = j.pages.find(p => p.flags?.[ID]?.scene === r.scene.id);
     if (page) update.push({ _id: page.id, name: r.scene.name, "text.content": content });
     else create.push({ name: r.scene.name, type: "text", text: { content }, flags: { [ID]: { scene: r.scene.id } } });
@@ -143,21 +180,40 @@ export class Results extends foundry.applications.api.ApplicationV2 {
   static DEFAULT_OPTIONS = { id: `${ID}-check`, classes: ["rb-check", UI.WINDOW], window: { title: "Red Book · Scene readiness", icon: "fa-solid fa-clipboard-check", resizable: true }, position: { width: 620, height: 600 } };
   static #app = null;
   static instance() { return (Results.#app ??= new Results()); }
+  /** Re-applies each shown scene's ignore store (no new check) and re-renders. */
+  static refreshIgnored() {
+    const app = Results.#app; if (!app?.results) return;
+    app.results = app.results.map(r => (r.all ? C.applyIgnored(r, ignoredOf(r.scene.id)) : r));
+    if (app.rendered) app.render();
+  }
   async _renderHTML() {
     const div = document.createElement("div"); div.className = "rb-check-body";
     if (!this.results) { div.innerHTML = `<p><i class="fa-solid fa-spinner fa-spin"></i> Checking ${esc(this.label ?? "")}…</p>`; return div; }
     const tot = this.results.reduce((t, r) => ({ problem: t.problem + r.tally.problem, warning: t.warning + r.tally.warning, note: t.note + r.tally.note }), { problem: 0, warning: 0, note: 0 });
-    div.innerHTML = `<p class="rb-total">${this.results.length > 1 ? `${this.results.length} scenes: ` : ""}${esc(C.tallyText(tot))}. Read-only: nothing was changed.</p>
-      ${this.results.map(r => `<details class="rb-scene" ${this.results.length === 1 || r.tally.problem ? "open" : ""}><summary><strong>${esc(r.scene.name)}</strong> <span class="hint">${esc(C.tallyText(r.tally))}</span></summary>
-        ${r.findings.length ? `<ul class="rb-findings">${r.findings.map((f, i) => `<li class="rb-${f.severity}"><span class="rb-sev">${f.severity}</span> <span class="rb-text">${esc(f.text)}</span>${f.fix ? `<button type="button" data-scene="${r.scene.id}" data-i="${i}" data-tooltip="Open it"><i class="fa-solid fa-wrench"></i></button>` : ""}</li>`).join("")}</ul>` : "<p>Nothing to fix.</p>"}</details>`).join("")}
+    const ign = this.results.reduce((n, r) => n + (r.ignored?.length ?? 0), 0);
+    const row = (r, f, i, ignored) => `<li class="rb-${f.severity}${ignored ? " rb-ignored" : ""}"><span class="rb-sev">${f.severity}</span> <span class="rb-text">${esc(f.text)}</span>`
+      + `${f.fix ? `<button type="button" data-fix data-scene="${r.scene.id}" data-i="${i}" data-ignored="${ignored ? 1 : 0}" data-tooltip="Open it"><i class="fa-solid fa-wrench"></i></button>` : ""}`
+      + `${f.key ? (ignored
+        ? `<button type="button" data-unignore="${esc(f.key)}" data-scene="${r.scene.id}" data-tooltip="Un-ignore${f.ignore?.name ? ` (ignored by ${esc(f.ignore.name)})` : ""}" aria-label="Un-ignore"><i class="fa-solid fa-eye"></i></button>`
+        : `<button type="button" data-ignore="${esc(f.key)}" data-scene="${r.scene.id}" data-tooltip="Ignore on this scene" aria-label="Ignore"><i class="fa-solid fa-eye-slash"></i></button>`) : ""}</li>`;
+    div.innerHTML = `<p class="rb-total">${this.results.length > 1 ? `${this.results.length} scenes: ` : ""}${esc(C.tallyText(tot))}${ign ? ` (${ign} ignored)` : ""}. Read-only: nothing in the scenes was changed.</p>
+      ${this.results.map(r => `<details class="rb-scene" ${this.results.length === 1 || r.tally.problem ? "open" : ""}><summary><strong>${esc(r.scene.name)}</strong> <span class="hint">${esc(C.tallyText(r.tally))}${r.ignored?.length ? ` · ${r.ignored.length} ignored` : ""}</span></summary>
+        ${r.findings.length ? `<ul class="rb-findings">${r.findings.map((f, i) => row(r, f, i, false)).join("")}</ul>` : "<p>Nothing to fix.</p>"}
+        ${r.ignored?.length ? `<details class="rb-ignored-list"><summary>Ignored (${r.ignored.length})</summary><ul class="rb-findings">${r.ignored.map((f, i) => row(r, f, i, true)).join("")}</ul></details>` : ""}
+        ${r.stored ? `<p class="rb-clear-ignored"><button type="button" data-clear-ignored="${r.scene.id}" data-tooltip="Stop ignoring every finding on this scene (${r.stored} saved)"><i class="fa-solid fa-eraser"></i> Clear ignored</button></p>` : ""}</details>`).join("")}
       <footer class="form-footer"><button type="button" data-action="rerun"><i class="fa-solid fa-rotate"></i> Check again</button><button type="button" data-action="export"><i class="fa-solid fa-file-export"></i> Export to journal</button></footer>`;
     return div;
   }
   _replaceHTML(result, content) {
     content.replaceChildren(result);
-    content.querySelectorAll("button[data-scene]").forEach(b => b.addEventListener("click", () => {
-      const r = this.results?.find(x => x.scene.id === b.dataset.scene); fix(b.dataset.scene, r?.findings[Number(b.dataset.i)]?.fix);
+    content.querySelectorAll("button[data-fix]").forEach(b => b.addEventListener("click", () => {
+      const r = this.results?.find(x => x.scene.id === b.dataset.scene);
+      fix(b.dataset.scene, (b.dataset.ignored === "1" ? r?.ignored : r?.findings)?.[Number(b.dataset.i)]?.fix);
     }));
+    const after = p => p.then(() => Results.refreshIgnored(), e => { console.warn(`${ID} | ignore`, e); ui.notifications.error("Red Book: couldn't save the ignored list (see console)."); });
+    content.querySelectorAll("button[data-ignore]").forEach(b => b.addEventListener("click", () => after(ignore(b.dataset.scene, b.dataset.ignore))));
+    content.querySelectorAll("button[data-unignore]").forEach(b => b.addEventListener("click", () => after(unignore(b.dataset.scene, b.dataset.unignore))));
+    content.querySelectorAll("button[data-clear-ignored]").forEach(b => b.addEventListener("click", () => after(clearIgnored(b.dataset.clearIgnored))));
     content.querySelector("[data-action=export]")?.addEventListener("click", () => exportReport(this.results));
     content.querySelector("[data-action=rerun]")?.addEventListener("click", () => { cache().clear(); run({ scenes: (this.results ?? []).map(r => r.scene.id) }); });
   }
@@ -193,4 +249,7 @@ export function contextOptions(options) {
   options.push(entry);
 }
 
-export const api = { run, chooser, checkOne, facts: sceneFacts, exportReport, rules: C.RULES, clearCache: () => cache().clear() };
+export const api = {
+  run, chooser, checkOne, facts: sceneFacts, exportReport, rules: C.RULES, clearCache: () => cache().clear(),
+  ignored: scene => C.normalizeIgnored(ignoredOf(scene)).entries, ignore, unignore, clearIgnored, clearAllIgnored
+};
