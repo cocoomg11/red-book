@@ -114,3 +114,30 @@ export function addTodos(items, scene, findings = [], now = Date.now(), max = TO
   return { items: normalizeTodos([...fresh.reverse(), ...list]).slice(0, Math.max(1, max)), added: fresh.length };
 }
 export const removeTodo = (items, id) => normalizeTodos(items).filter(i => i.id !== id);
+
+// ---------------------------------------------------------------- next session (0.5.0): the date the GM sets on the board
+/**
+ * The stored next-session date (world setting `nextSession`, `{ v: 1, at: ms }`; players may see it, it isn't GM-only). Anything
+ * unreadable is "not set" (at 0).
+ * @param {any} raw
+ * @returns {{ v: 1, at: number }}
+ */
+export function normalizeNext(raw) {
+  const at = Math.floor(Number(raw?.at));
+  return { v: 1, at: Number.isFinite(at) && at > 0 ? at : 0 };
+}
+const pad = n => String(n).padStart(2, "0");
+/** A ms time as the value of an `<input type="datetime-local">` (local time, minutes), or "" when not set. */
+export function toLocalInput(ms) {
+  const n = Number(ms); if (!Number.isFinite(n) || n <= 0) return "";
+  const d = new Date(n);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+/** A `datetime-local` value (local time) as ms, or 0 when blank or unreadable. */
+export function fromLocalInput(value) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(String(value ?? "").trim());
+  if (!m) return 0;
+  const [y, mo, d, h, mi] = m.slice(1).map(Number);
+  const t = new Date(y, mo - 1, d, h, mi).getTime();
+  return Number.isFinite(t) ? t : 0;
+}

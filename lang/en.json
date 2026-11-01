@@ -192,6 +192,21 @@
       "onBoard": "On the next-session board",
       "done": "Done (take off the list)",
       "none": "Nothing to fix. Send failed findings here from the Scene check page."
+    },
+    "Next": {
+      "title": "Next session",
+      "label": "Date and time of the next session",
+      "in": "In {time}.",
+      "past": "That date has passed.",
+      "unset": "Not set.",
+      "clear": "Clear",
+      "post": "Post to Discord",
+      "saved": "Next session saved."
+    },
+    "Discord": {
+      "test": "Send test message",
+      "testHint": "Posts a short message from this browser to check the webhook.",
+      "honor": "Honor system: players can read the webhook URL from the browser console (world settings reach every browser). Use a webhook for one channel only, and delete it in Discord if it leaks."
     }
   }
 }

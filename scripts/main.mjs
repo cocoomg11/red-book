@@ -4,7 +4,9 @@
  * from core.mjs. Each tool is a feature that can be turned off; a turned-off tool registers nothing and its API entry is undefined.
  */
 import { ID, HOOKS } from "./const.mjs";
-import { F, S, L, warn } from "./core.mjs";
+import { F, S, L, get, warn } from "./core.mjs";
+import { normalizeNext } from "./board-model.mjs";
+import { gateApi } from "./check-model.mjs";
 import * as Session from "./session.mjs";
 import * as Board from "./board.mjs";
 import * as Check from "./check.mjs";
@@ -13,11 +15,15 @@ import * as Panel from "./panel.mjs";
 import * as Start from "./start.mjs";
 import * as Online from "./online.mjs";
 import * as Migrate from "./migrate.mjs";
+import * as Discord from "./discord.mjs";
 import { report } from "./health.mjs";
 import { registration, registerWith, SATCHEL_ID } from "./satchel-model.mjs";
 import { RECORDS } from "./settings-model.mjs";
 
-const deps = { session: Session, board: Board, check: Check, cleanup: Cleanup, online: Online, start: Start };
+const deps = { session: Session, board: Board, check: Check, cleanup: Cleanup, online: Online, start: Start, discord: Discord };
+
+/** The Discord API (GM only; players get "GM only" and undefined). */
+const DiscordApi = gateApi({ post: msg => Discord.post(msg ?? {}, { here: true }), test: () => Discord.test() }, () => !!game.user?.isGM, () => ui.notifications.warn("Red Book: GM only."));
 
 Hooks.once("init", () => {
   F.register();
@@ -27,6 +33,11 @@ Hooks.once("init", () => {
   Panel.init(deps); Board.init(deps); Start.init(deps);
   if (F.on("sessionLog")) Session.registerKeybinding();
   if (F.on("whosOnline")) Online.init();
+  // 0.5.0: Open Red Book (GM). No default key: the GM picks one in Configure Controls.
+  if (F.on("openKey")) game.keybindings.register(ID, "openRedBook", {
+    name: "Open Red Book", hint: "Opens the Red Book window (GM).", editable: [], restricted: true,
+    precedence: CONST.KEYBINDING_PRECEDENCE.NORMAL, onDown: () => { Panel.open(); return true; }
+  });
 
   Hooks.on("getSceneControlButtons", controls => {
     if (!game.user.isGM) return;
@@ -50,6 +61,7 @@ Hooks.once("ready", () => {
   Panel.ready();
   if (F.on("sessionLog")) Session.ready();
   if (F.on("prepBoard")) Board.ready();
+  if (F.on("discord")) Discord.ready();
   if (F.on("whosOnline")) Migrate.clientPosition().finally(() => Online.ready());
   // One-time GM work on the leader, after the GM tabs have found each other: carry over the toolkit's settings and Hub flags, and
   // move the board pins out of the world setting into the GM-only store.
@@ -62,6 +74,10 @@ Hooks.once("ready", () => {
     get sceneCheck() { return F.on("sceneCheck") ? Check.api : undefined; },
     get sessionStart() { return F.on("sessionStart") ? Start.api : undefined; },
     get online() { return F.on("whosOnline") ? Online.api : undefined; },
+    /** Experimental (0.5.0), GM only: post a message ({ title, text, footer }) or the test message to the Discord webhook. */
+    get discord() { return F.on("discord") ? DiscordApi : undefined; },
+    /** 0.5.0: the next session's date (ms, 0 = not set); readable by everyone (it's a world setting). */
+    nextSession: () => normalizeNext(get("nextSession")).at,
     /** GM only: opens the Red Book window, on a page (session, board, check, online, past, features, tools, health, data) or an old tab name. */
     panel: page => Panel.open(page),
     /** GM only: the read-only health report ([{ title, lines }]); undefined for players. */

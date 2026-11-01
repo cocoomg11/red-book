@@ -19,6 +19,7 @@ export const TABS = [
   { id: "check", label: "Scene check", icon: "fa-solid fa-clipboard-check", feature: "sceneCheck" },
   { id: "start", label: "Session Start", icon: "fa-solid fa-flag-checkered", feature: "sessionStart" },
   { id: "online", label: "Who's online", icon: "fa-solid fa-users", feature: "whosOnline" },
+  { id: "discord", label: "Discord", icon: "fa-brands fa-discord", feature: "discord" },
   { id: "data", label: "Data", icon: "fa-solid fa-broom" }
 ];
 
@@ -43,6 +44,12 @@ export const SETTINGS = defineSettings([
   row("online", "whosOnline", "onlinePosition", "choice", "top-left", "Panel position", "Where the panel starts on Hub scenes (top left sits right of the scene navigation). Each user can drag it elsewhere.", { advanced: true, choices: { ...POSITIONS } }),
   row("online", "whosOnline", "onlineDrag", "bool", true, "The panel can be moved", "Everyone can drag the panel by its title to a spot of their own (kept for that browser, always on screen); double-click the title to put it back.", { advanced: true }),
   row("online", "whosOnline", "onlineLegacyHooks", "bool", true, "Also fire the old hook names", "Besides red-book.allPlayersOnline and red-book.playerCountChanged, fire wayfarers-toolkit.allPlayersOnline and wayfarers-toolkit.playerCountChanged for world scripts written for the companion toolkit (skipped while the toolkit still provides its own Who's online).", { advanced: true }),
+  // 0.5.0: Discord posts (feature off by default). The URL is a world setting: players can read it from the console (honor system).
+  row("discord", "discord", "discordWebhook", "text", "", "Webhook URL", "Discord: channel settings › Integrations › Webhooks › New webhook › Copy URL. Only a GM's browser posts. Honor system: world settings reach every player's browser, so a player who opens the browser console can read this URL and post to that channel. Make a webhook for one channel you don't mind, and delete it in Discord if it leaks."),
+  row("discord", "discord", "discordEnd", "bool", true, "Post a summary when a session ends", "How long you played, what happened, quest progress and open threads. GM-only notes, private threads and hidden quests are left out."),
+  row("discord", "discord", "discordRecap", "bool", false, "Post the recap when you share it", "After you review it with Share as recap, post the same text (secret blocks and unticked lines are left out)."),
+  row("discord", "discord", "discordNext", "bool", true, "Post the next session's date when you set it", "When you save a date in Next session on the board, post it (each reader sees it in their own time zone)."),
+  row("discord", "discord", "discordName", "text", "Red Book", "Post as", "The name the posts show in Discord.", { advanced: true }),
   row("data", null, "debugLog", "bool", false, "Debug logging", "Write Red Book's automatic decisions (leader changes, skipped duplicates) to the browser console.", { advanced: true }),
   // Hidden record settings (written by the module). boardPins is only read for the one-time move into the GM-only store (0.3.0)
   // and is kept registered so that move can read it; the key never changes.
@@ -51,7 +58,9 @@ export const SETTINGS = defineSettings([
   { key: "onlineHudPos", type: "object", default: {}, hidden: true, client: true },
   // 0.4.0: the Hub panel folded to its header, per browser (the fold button in its header; not shown in the settings).
   { key: "onlineHudCollapsed", type: "bool", default: false, hidden: true, client: true },
-  { key: "boardPins", type: "object", default: { v: 1, pins: [] }, hidden: true }
+  { key: "boardPins", type: "object", default: { v: 1, pins: [] }, hidden: true },
+  // 0.5.0: the next session's date, set on the board (not GM-only: the players may see it).
+  { key: "nextSession", type: "object", default: { v: 1, at: 0 }, hidden: true }
 ], { reserved: FEATURE_KEYS });
 
 /** Hidden record settings: never shown and never reset by "Reset tab". */

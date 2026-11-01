@@ -11,7 +11,7 @@ import * as S from "./settings-model.mjs";
 import { report } from "./health.mjs";
 import * as V from "./view.mjs";
 import { t } from "./i18n.mjs";
-import { PINS_MAX, TODOS_MAX, isFailure } from "./board-model.mjs";
+import { PINS_MAX, TODOS_MAX, isFailure, normalizeNext, fromLocalInput } from "./board-model.mjs";
 import * as UI from "./ui.mjs";
 
 /** @type {any} */
@@ -60,7 +60,7 @@ export class RedBookApp extends foundry.applications.api.ApplicationV2 {
   #page() {
     const p = this.page;
     if (p === "session") return this.#sessionPage();
-    if (p === "board") return F.on("prepBoard") ? V.boardPageHTML(deps.board.model(), look, { sessionOn: F.on("sessionLog"), checkOn: F.on("sceneCheck"), pinsMax: PINS_MAX, prepOn: F.on("prepList"), todosMax: TODOS_MAX }) : V.pageHead(t("Nav.board")) + V.offAlert();
+    if (p === "board") return F.on("prepBoard") ? V.boardPageHTML(deps.board.model(), look, { sessionOn: F.on("sessionLog"), checkOn: F.on("sceneCheck"), pinsMax: PINS_MAX, prepOn: F.on("prepList"), todosMax: TODOS_MAX, next: { at: normalizeNext(get("nextSession")).at, now: Date.now(), discord: F.on("discord") } }) : V.pageHead(t("Nav.board")) + V.offAlert();
     if (p === "check") {
       if (!F.on("sceneCheck")) return V.pageHead(t("Nav.check")) + V.offAlert();
       const scenes = game.scenes.contents.map(s => ({ id: s.id, name: s.name })).sort((a, b) => a.name.localeCompare(b.name));
@@ -80,7 +80,8 @@ export class RedBookApp extends foundry.applications.api.ApplicationV2 {
     if (p === "tools") {
       const tab = TOOL_TABS().find(x => x.id === this.tool) ?? TOOL_TABS()[0];
       const off = !!tab.feature && !F.on(tab.feature);
-      const extra = tab.id === "check" && !off ? `<div class="wc-row"><button type="button" class="wc-btn wc-btn-sm" data-action="clearAllIgnored"><i class="fa-solid fa-eraser" aria-hidden="true"></i> ${UI.escText(t("Tools.clearAll"))}</button></div><p class="wc-hint">${UI.escText(t("Tools.clearAllHint"))}</p>` : "";
+      const extra = tab.id === "check" && !off ? `<div class="wc-row"><button type="button" class="wc-btn wc-btn-sm" data-action="clearAllIgnored"><i class="fa-solid fa-eraser" aria-hidden="true"></i> ${UI.escText(t("Tools.clearAll"))}</button></div><p class="wc-hint">${UI.escText(t("Tools.clearAllHint"))}</p>`
+        : tab.id === "discord" && !off ? V.discordExtraHTML() : "";
       return V.toolSettingsHTML({ tool: tab.id, tabs: TOOL_TABS(), rows: S.tabRows(tab.id), value: get, off, extra });
     }
     if (p === "health") return V.healthPageHTML(report(deps));
@@ -166,6 +167,10 @@ export class RedBookApp extends foundry.applications.api.ApplicationV2 {
         return B?.addTodos(r.scene, list.filter(isFailure));
       }
       case "prepDone": return B?.doneTodo(d.id);
+      case "saveNext": return this.#saveNext();
+      case "clearNext": await set("nextSession", { v: 1, at: 0 }); return this.render();
+      case "postNext": return deps.discord?.postNext(normalizeNext(get("nextSession")).at, { force: true });
+      case "discordTest": return deps.discord?.test();
       case "openOnline": return deps.online?.open();
       case "resetHud": return deps.online?.resetPosition();
       case "cleanup": return deps.cleanup?.open();
@@ -183,9 +188,20 @@ export class RedBookApp extends foundry.applications.api.ApplicationV2 {
     if (ok !== false && el) { el.value = ""; ui.notifications.info(`Red Book: ${t("Session.noteAdded")}`); }
   }
 
+  /** Saves the board's Next session field; posts it to Discord from this GM's browser when that's on. */
+  async #saveNext() {
+    const at = fromLocalInput(this.element?.querySelector?.("[name=nextAt]")?.value);
+    const was = normalizeNext(get("nextSession")).at;
+    await set("nextSession", { v: 1, at });
+    ui.notifications.info(`Red Book: ${t("Next.saved")}`);
+    if (at && at !== was && F.on("discord") && get("discordNext") !== false) deps.discord?.postNext(at, { force: true });
+    return this.render();
+  }
+
   async #submit() {
     const form = this.element;
     if (this.page === "session") return this.#addNote();
+    if (this.page === "board") return this.#saveNext();
     if (this.page === "features") {
       let changed = false;
       for (const f of F.FEATURES) { const v = !!form.elements[f.key]?.checked; if (v !== F.on(f.id)) { await game.settings.set(ID, f.key, v); changed = true; } }

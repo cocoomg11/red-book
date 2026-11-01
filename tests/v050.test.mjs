@@ -6,6 +6,9 @@ import * as V from "../scripts/view.mjs";
 import * as B from "../scripts/board-model.mjs";
 import * as C from "../scripts/check-model.mjs";
 import * as St from "../scripts/store-model.mjs";
+import * as D from "../scripts/discord-model.mjs";
+import * as Set_ from "../scripts/settings-model.mjs";
+import * as Feat from "../scripts/features.mjs";
 import * as M from "../scripts/session-model.mjs";
 import { REQUESTS } from "../scripts/requests.mjs";
 import { readRequest, makeRequestId } from "../vendor/wanderers-core/index.mjs";
@@ -217,4 +220,91 @@ test("board: prep panel grouped by scene, scene link and Check again, Done butto
   assert.match(V.boardPageHTML(m, u => ({ name: u, exists: true, scene: true }), { prepOn: true, checkOn: false }), /Prep list/);
   assert.ok(!V.boardPageHTML(m, u => ({ name: u, exists: true, scene: true }), { prepOn: false }).includes("Prep list"));
   assert.ok(!V.prepPanelHTML(items, { checkOn: false }).includes("checkScene"));
+});
+
+// ---------------------------------------------------------------- next session
+test("next session: stored shape, datetime-local round trip, board field", () => {
+  assert.deepEqual(B.normalizeNext(null), { v: 1, at: 0 });
+  assert.deepEqual(B.normalizeNext({ at: "junk" }), { v: 1, at: 0 });
+  const at = new Date(2026, 10, 7, 19, 30).getTime();
+  assert.equal(B.toLocalInput(at), "2026-11-07T19:30");
+  assert.equal(B.fromLocalInput("2026-11-07T19:30"), at);
+  assert.equal(B.fromLocalInput(""), 0); assert.equal(B.fromLocalInput("tomorrow"), 0); assert.equal(B.toLocalInput(0), "");
+  const html = V.nextPanelHTML({ at, now: at - 3 * 86400000, discord: true });
+  noMissing(html);
+  assert.match(html, /type="datetime-local"[^>]*value="2026-11-07T19:30"/);
+  assert.match(html, /In 3 days/); assert.match(html, /data-action="postNext"/); assert.match(html, /data-action="clearNext"/);
+  const unset = V.nextPanelHTML({ at: 0, now: 1, discord: true });
+  assert.match(unset, /Not set/); assert.ok(!unset.includes("postNext") && !unset.includes("clearNext"));
+  assert.ok(!V.nextPanelHTML({ at, now: 0, discord: false }).includes("postNext"));
+  assert.match(V.nextPanelHTML({ at: 5, now: 10 }), /That date has passed/);
+});
+
+// ---------------------------------------------------------------- Discord
+const HOOK = "https://discord.com/api/webhooks/123456789012345678/abcdefghijklmnopqrstuvwxyz_ABCDEF-123";
+test("discord: only Discord webhook URLs are posted to; wait=true added, thread kept", () => {
+  assert.ok(D.webhookOk(HOOK)); assert.ok(D.webhookOk(HOOK.replace("discord.com", "discordapp.com")));
+  assert.ok(D.webhookOk(`${HOOK}?thread_id=123456789012`));
+  for (const bad of ["", "http://discord.com/api/webhooks/1234567/abcdefghijklmnopqrstuvwxyz", "https://evil.example/api/webhooks/123456/abcdefghijklmnopqrstuvwxyz",
+    "https://discord.com.evil.example/api/webhooks/123456/abcdefghijklmnopqrstuvwxyz", `${HOOK}/../../x`, "javascript:alert(1)"]) assert.equal(D.webhookOk(bad), false, bad);
+  assert.equal(D.postUrl(HOOK), `${HOOK}?wait=true`);
+  assert.equal(D.postUrl(`${HOOK}?thread_id=123456789012`), `${HOOK}?thread_id=123456789012&wait=true`);
+  assert.equal(D.postUrl("nope"), "");
+});
+test("discord: payloads never ping, stay in Discord's limits, plain-text fallback", () => {
+  const e = D.embedPayload({ title: "x".repeat(400), text: "y".repeat(5000), footer: "f", username: "Red Book" });
+  assert.deepEqual(e.allowed_mentions, { parse: [] });
+  assert.equal(e.embeds[0].title.length, D.LIMITS.title); assert.equal(e.embeds[0].description.length, D.LIMITS.description);
+  assert.equal(e.username, "Red Book");
+  const p = D.textPayload({ title: "T", text: "z".repeat(3000) });
+  assert.equal(p.content.length, D.LIMITS.content); assert.ok(p.content.startsWith("**T**\n")); assert.deepEqual(p.allowed_mentions, { parse: [] });
+  assert.equal(D.md("*a* _b_ @everyone"), "\\*a\\* \\_b\\_ @everyone");
+});
+test("discord: session summary text is player-safe (no private threads, GM-only quest lines or notes)", () => {
+  const sum = { counts: { scene: 2, note: 3, quest: 2, session: 2 }, notable: ["Wolf was killed.", "Quest given: Open."], realMs: 3600000, worldSeconds: 7200,
+    quests: [{ text: "Quest given: Open.", private: false }, { text: "Quest given: Hidden.", private: true }],
+    threads: [{ text: "Who is the stranger", private: false }, { text: "Secret twist", private: true }] };
+  const txt = D.summaryText(sum, { scene: { label: "Scenes activated" }, quest: { label: "Quests" } });
+  assert.match(txt, /^Played 1 hour, in-world 2 hours\./);
+  assert.match(txt, /Scenes activated: 2 · Quests: 2/); assert.ok(!/Notes: 3/.test(txt));
+  assert.match(txt, /\*\*Notable moments\*\*\n• Wolf was killed\./);
+  assert.match(txt, /\*\*Quests\*\*\n• Quest given: Open\./);
+  assert.ok(!txt.includes("Hidden") && !txt.includes("Secret twist"));
+  assert.equal((txt.match(/Quest given: Open/g) ?? []).length, 1);
+  assert.equal(D.summaryText(null), "");
+});
+test("discord: recap HTML to text drops secret blocks and links, keeps headings and list lines", () => {
+  const html = `<h2>Timeline</h2><ul><li><span class="rb-when">19:00</span> Met @UUID[Actor.x]{Guard}.</li></ul><section class="secret"><p>GM stuff</p></section><p>Done *now*.</p>`;
+  const txt = D.htmlToText(html);
+  assert.match(txt, /\*\*Timeline\*\*/); assert.match(txt, /• 19:00 Met Guard\./); assert.match(txt, /Done \\\*now\\\*\./);
+  assert.ok(!txt.includes("GM stuff") && !txt.includes("UUID"));
+});
+test("discord: next-session timestamps, retry and rate-limit waits, error text without the URL", () => {
+  assert.equal(D.nextText(1700000000000), "<t:1700000000:F> (<t:1700000000:R>)"); assert.equal(D.nextText(0), "");
+  assert.equal(D.retryDelay(429, () => null, { retry_after: 1.5 }), 1500);
+  assert.equal(D.retryDelay(429, n => (n === "retry-after" ? "3" : null)), 3000);
+  assert.equal(D.retryDelay(429, () => null, { retry_after: 9999 }), 60000);
+  assert.equal(D.retryDelay(502), 2000); assert.equal(D.retryDelay(400), null); assert.equal(D.retryDelay(404), null);
+  assert.equal(D.bucketDelay(n => ({ "x-ratelimit-remaining": "0", "x-ratelimit-reset-after": "2.2" })[n]), 2200);
+  assert.equal(D.bucketDelay(n => ({ "x-ratelimit-remaining": "3", "x-ratelimit-reset-after": "2" })[n]), 0);
+  assert.match(D.errorText(404), /deleted/); assert.match(D.errorText(500, { message: "oops" }), /500: oops/);
+  assert.ok(!D.errorText(401).includes("http"));
+});
+test("discord: settings on their own tab with the honor-system hint; feature off by default; extra markup", () => {
+  const { basic, advanced } = Set_.tabRows("discord");
+  assert.deepEqual(basic.map(s => s.key), ["discordWebhook", "discordEnd", "discordRecap", "discordNext"]);
+  assert.deepEqual(advanced.map(s => s.key), ["discordName"]);
+  assert.match(basic[0].hint, /Honor system/); assert.match(basic[0].hint, /console/);
+  assert.ok(basic.every(s => s.feature === "discord"));
+  assert.equal(Feat.FEATURES.find(f => f.id === "discord").default, false);
+  assert.ok(Set_.TABS.some(x => x.id === "discord" && x.feature === "discord"));
+  const x = V.discordExtraHTML(); noMissing(x);
+  assert.match(x, /data-action="discordTest"/); assert.match(x, /Honor system/);
+});
+test("features 0.5.0: needs are declared (journeys and quest events need the log; prep list needs board and check)", () => {
+  const f = id => Feat.FEATURES.find(x => x.id === id);
+  assert.deepEqual([...f("questEvents").needs], ["sessionLog"]);
+  assert.deepEqual([...f("journeys").needs], ["sessionLog"]);
+  assert.deepEqual([...f("prepList").needs], ["prepBoard", "sceneCheck"]);
+  assert.deepEqual([...f("openKey").needs], []);
 });

@@ -7,6 +7,7 @@ import { healthCollector } from "../vendor/wanderers-core/index.mjs";
 import { sceneTab } from "../vendor/wanderers-core/foundry/index.mjs";
 import { ID, TOOLKIT_ID, MATT_ID } from "./const.mjs";
 import { F, L, get } from "./core.mjs";
+import { webhookOk } from "./discord-model.mjs";
 
 export function report(deps = {}) {
   const h = healthCollector();
@@ -35,6 +36,12 @@ export function report(deps = {}) {
     add(r.all ? "ok" : "info", r.expected ? `${r.present} of ${r.expected} players here${r.all ? ": everyone's here" : ""}.` : "No players count towards \"Everyone's here\" yet.");
   });
   if (F.on("whosOnline")) h.check(add => { if (!sceneTab.sections().some(s => s.moduleId === ID)) add("warn", "The Hub scene option isn't in the Table Tools scene tab."); });
+  if (F.on("discord")) h.check(add => {
+    const url = String(get("discordWebhook") ?? "").trim();
+    if (!url) add("warn", "Discord posts are on but no webhook URL is set (Tool settings › Discord).");
+    else if (!webhookOk(url)) add("bad", "Discord: the webhook URL doesn't look like a Discord webhook; nothing is posted.");
+    else add("info", "Discord posts are on. Honor system: players can read the webhook URL from the browser console.");
+  });
   h.check(add => { if (get("debugLog")) add("info", "Debug logging is on."); });
   return h.report();
 }

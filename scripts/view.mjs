@@ -9,7 +9,7 @@
 import { esc, plural } from "./const.mjs";
 import { navItem, statusLine, statusLines, badge, dot, icon, TONES } from "../vendor/wanderers-core/index.mjs";
 import { TYPES, durationText } from "./session-model.mjs";
-import { isFailure, todoId } from "./board-model.mjs";
+import { isFailure, todoId, toLocalInput } from "./board-model.mjs";
 import { groupFindings, tallyText } from "./check-model.mjs";
 import { t } from "./i18n.mjs";
 
@@ -245,10 +245,25 @@ export function boardPageHTML(m, look, opts = {}) {
   const scenes = m.links.scenes;
   const pins = `<div class="rb-drop" data-drop>${m.pins.length ? `<ul class="wc-panel-list">${m.pins.map(p => row(p.uuid, p.name || "", "").replace(/<\/li>$/, `${iconBtn("unpin", "fa-solid fa-xmark", t("Board.unpin"), { uuid: p.uuid })}</li>`)).join("")}</ul>` : ""}<p class="wc-hint rb-pad">${esc(t("Board.dropHint", { n: opts.pinsMax ?? 50 }))}</p></div>`;
   return `${pageHead(t("Nav.board"))}<div class="rb-board3">
-    <div class="rb-board-col">${panel(t("Board.quests"), "fa-solid fa-scroll", quests)}${panel(t("Board.last"), "fa-solid fa-book", last)}</div>
+    <div class="rb-board-col">${opts.next ? nextPanelHTML(opts.next) : ""}${panel(t("Board.quests"), "fa-solid fa-scroll", quests)}${panel(t("Board.last"), "fa-solid fa-book", last)}</div>
     <div class="rb-board-col">${panel(t("Board.npcs"), "fa-solid fa-user-group", linked(m.links.actors, t("Board.noNpcs")))}${panel(t("Board.journals"), "fa-solid fa-book-open", linked([...m.links.journals, ...m.links.other], t("Board.noJournals")))}${panel(t("Board.scenes"), "fa-solid fa-map", linked(scenes, t("Board.noScenes")), { head: scenes.length && opts.checkOn ? btn("checkAll", "fa-solid fa-clipboard-check", t("Board.checkAll"), { small: true }) : "" })}</div>
     <div class="rb-board-col">${opts.prepOn ? prepPanelHTML(m.todos ?? [], { checkOn: !!opts.checkOn, max: opts.todosMax }) : ""}${panel(t("Board.pinned"), "fa-solid fa-thumbtack", pins, { head: badge("info", `${m.pins.length}/${opts.pinsMax ?? 50}`, { small: true }) })}</div>
   </div>`;
+}
+
+/**
+ * The board's Next session field (0.5.0): a local date and time, Save, Clear and (Discord posts on) Post to Discord. `n`: { at (ms,
+ * 0 = not set), now, discord (feature on) }. Shown as "in 3 days" next to it when set.
+ * @param {{ at?: number, now?: number, discord?: boolean }} n
+ */
+export function nextPanelHTML(n) {
+  const at = Number(n?.at) || 0; const now = Number(n?.now) || 0;
+  const when = at ? (at >= now ? t("Next.in", { time: durationText(Math.round((at - now) / 1000)) }) : t("Next.past")) : t("Next.unset");
+  const body = `<div class="wc-panel-body"><div class="wc-row rb-next-row"><label class="wc-sr" for="rb-next-at">${esc(t("Next.label"))}</label>
+    <input type="datetime-local" id="rb-next-at" name="nextAt" value="${esc(toLocalInput(at))}">
+    ${btn("saveNext", "fa-solid fa-floppy-disk", t("Common.save"), { small: true, primary: true })}${at ? btn("clearNext", "fa-solid fa-xmark", t("Next.clear"), { small: true }) : ""}${n?.discord && at ? btn("postNext", "fa-brands fa-discord", t("Next.post"), { small: true }) : ""}</div>
+    <p class="wc-hint">${esc(when)}</p></div>`;
+  return panel(t("Next.title"), "fa-solid fa-calendar-day", body);
 }
 
 /**
@@ -424,6 +439,10 @@ export function toolSettingsHTML({ tool, tabs = [], rows = { basic: [], advanced
     ${rows.advanced.length ? `<details class="rb-advanced"><summary>${esc(t("Tools.advanced"))}</summary>${rows.advanced.map(s => settingRowHTML(s, value(s.key), off)).join("")}</details>` : ""}
     ${n ? "" : hint(t("Tools.none"))}${extra}</div></div>${n ? saveBar() : ""}`;
 }
+
+/** The Discord tool's extra settings markup (0.5.0): the honor-system warning and Send test message. */
+export const discordExtraHTML = () => `<div class="wc-alert wc-warn">${icon("warn")}<div class="wc-alert-title">${esc(t("Discord.honor"))}</div></div>`
+  + `<div class="wc-row">${btn("discordTest", "fa-brands fa-discord", t("Discord.test"), { small: true })}</div>${hint(t("Discord.testHint"))}`;
 
 /** Health: core's report sections ([{ title, lines }]). */
 export function healthPageHTML(report = []) {
