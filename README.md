@@ -174,4 +174,4 @@ Hooks (fired with `Hooks.callAll` on every client):
 
 Red Book bundles [wanderers-core](https://github.com/cocoomg11/wanderers-core) in `vendor/wanderers-core/`, pinned in `wanderers-core.lock.json`. Never edit it by hand. Update it with `node vendor/wanderers-core/vendor.mjs update X.Y.Z`; `npm run verify-core` checks it matches the pin.
 
-`npm test` runs the pure-logic tests with Node's built-in test runner (Node 22); `npm run check` syntax-checks every script; `npm run lint` runs ESLint with core's shared config; `npm run types` runs the JSDoc type check (not in CI yet: the older tool files aren't clean). GitHub Actions runs core's shared checks (pin, syntax, lint, tests).
+`npm test` runs the pure-logic tests with Node's built-in test runner (Node 22); `npm run check` syntax-checks every script; `npm run lint` runs ESLint with core's shared config; `npm run types` runs the JSDoc type check (not in CI yet: the older tool files aren't clean). GitHub Actions runs core's shared checks (pin, syntax, tests; lint and types are switched off there until the dev tools are listed in package.json).
