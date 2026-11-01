@@ -94,7 +94,9 @@ Run it from the clipboard button (the viewed scene), the control panel (*Check s
 | The scene's linked journal (and page) exists | problem |
 | Connected players have a character assigned | warning |
 
-Files are checked with a HEAD request to your Foundry server, a few at a time, with a time-out (a file that doesn't answer is reported as *couldn't be checked*, not missing), and remembered for five minutes. Files on other websites aren't checked. **Export to journal** writes the results to a GM-only *Scene check* journal (one page per scene, replaced on each export). Every check can be turned off (Scene check tab, Advanced).
+**Ignoring a finding.** Each finding has an **Ignore** button (crossed-out eye). An ignored finding stops counting toward that scene's totals and moves into a collapsed **Ignored (n)** list under the scene, where **Un-ignore** brings it back. Ignores are saved on the scene itself (`flags.red-book.ignoredChecks`), so they survive reloads and never affect another scene. Each one is tied to that rule and that one thing: ignoring "no hit points" on one NPC token doesn't hide it on another. An ignore whose finding no longer comes up is kept but not shown. **Clear ignored** (in the scene's section) wipes one scene's list; **Clear all ignored warnings…** (control panel, Scene check tab) wipes every scene's after a confirm. GM only.
+
+Files are checked with a HEAD request to your Foundry server, a few at a time, with a time-out (a file that doesn't answer is reported as *couldn't be checked*, not missing), and remembered for five minutes. Files on other websites aren't checked. **Export to journal** writes the results to a GM-only *Scene check* journal (one page per scene, replaced on each export); ignored findings are listed separately, marked *ignored*. Every check can be turned off (Scene check tab, Advanced).
 
 ## Control panel and settings
 
@@ -107,6 +109,7 @@ Exactly one client records and writes: the active GM user's earliest-opened tab.
 ## Data Red Book writes, and removing it
 
 - Journal entries: session logs (`flags.red-book.session`, versioned, at most 1000 events and 500 NPCs met per session), recaps (`flags.red-book.recap`), the *Scene check* report journal (`flags.red-book.reports`). Folders it made carry `flags.red-book.folder`.
+- Scenes: the scene check's ignored findings (`flags.red-book.ignoredChecks`: `{ v, entries: [{ key, at, by, name }] }`, at most 500 per scene). Remove Red Book data's *flags* category removes them too.
 - World settings under `red-book.*`, including the pinned list (`boardPins`, versioned, at most 50) and the open session id.
 - **Remove Red Book data** (Module Settings, or the control panel's Data tab) shows a dry run with counts and names, then removes only the ticked categories after you type REMOVE.
 
@@ -119,7 +122,7 @@ Exactly one client records and writes: the active GM user's earliest-opened tab.
 | `session.start()`, `session.end()`, `session.note(text, { thread, private })`, `session.noteDialog()`, `session.current()`, `session.list()`, `session.get(idOrEntry)`, `session.shareRecap(idOrEntry)` | stable |
 | `session.log(type, text, { refs, private })` (add an event from another module), `session.flush()` | experimental |
 | `board.open()`, `board.pins()`, `board.pin(uuid)`, `board.unpin(uuid)`, `board.model()`, `board.refresh()` | experimental |
-| `sceneCheck.run({ scenes, folder, all })`, `sceneCheck.chooser()`, `sceneCheck.checkOne(scene)`, `sceneCheck.exportReport(results)`, `sceneCheck.facts(scene)`, `sceneCheck.rules`, `sceneCheck.clearCache()` | experimental |
+| `sceneCheck.run({ scenes, folder, all })`, `sceneCheck.chooser()`, `sceneCheck.checkOne(scene)`, `sceneCheck.exportReport(results)`, `sceneCheck.facts(scene)`, `sceneCheck.rules`, `sceneCheck.clearCache()`, `sceneCheck.ignored(scene)`, `sceneCheck.ignore(scene, key)`, `sceneCheck.unignore(scene, key)`, `sceneCheck.clearIgnored(scene)`, `sceneCheck.clearAllIgnored({ confirm })` | experimental |
 | `panel(tab)`, `health()`, `cleanup.plan()`, `cleanup.dryRun()`, `cleanup.remove(pick)`, `cleanup.open()`, `features.on(id)`, `features.list()`, `leader()`, `hooks` | experimental |
 
 Hooks (fired with `Hooks.callAll` on every client):
