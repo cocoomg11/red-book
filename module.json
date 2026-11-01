@@ -1,0 +1,23 @@
+{
+  "id": "red-book",
+  "title": "Red Book",
+  "description": "Less prep for the GM: a session log that records the game as you play (scenes, combats, downs, rests, loot, time, journals shown, NPCs met, level-ups and quick notes) with a summary and a reviewed player recap; a next-session board with active quests, linked NPCs, journals and scenes, open threads and your pins; and a read-only scene readiness check. Every tool can be turned off. Works with any system; extra support for dnd5e.",
+  "version": "0.1.0",
+  "authors": [{ "name": "cocoomg11" }],
+  "compatibility": { "minimum": "13", "verified": "14.369" },
+  "relationships": {
+    "recommends": [
+      { "id": "wayfarers-toolkit", "type": "module", "reason": "Its quests feed the next-session board, and its quests, travel, flights and loot rolls are logged in the session log." }
+    ]
+  },
+  "esmodules": ["scripts/main.mjs"],
+  "styles": ["styles/red-book.css"],
+  "socket": true,
+  "languages": [{ "lang": "en", "name": "English", "path": "lang/en.json" }],
+  "url": "https://github.com/cocoomg11/red-book",
+  "manifest": "https://github.com/cocoomg11/red-book/releases/latest/download/module.json",
+  "download": "https://github.com/cocoomg11/red-book/releases/download/v0.1.0/module.zip",
+  "bugs": "https://github.com/cocoomg11/red-book/issues",
+  "license": "LICENSE",
+  "readme": "README.md"
+}
