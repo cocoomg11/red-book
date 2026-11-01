@@ -1,5 +1,56 @@
 # Changelog
 
+## 0.4.0 (2026-11-01)
+
+### Changed
+- **One Red Book window** with a sidebar, replacing the tabbed control panel, the separate board window and the scene-check results window. **Tools**: Session, Board, Scene check, Online, Past sessions. **Settings**: Features, Tool settings, Health, Data. Open it with the new **Red Book** button (open book) in the token controls, Module Settings › Red Book › *Open the control panel*, or `api.panel(page)` (the old tab names still work). Arrow keys, Home and End move through the sidebar; in a narrow window it becomes a strip across the top. It follows Foundry's light and dark themes.
+- **Session page** (the start page): a banner says whether a session is running (with Start, Session Start…, Note box and End), tiles count events, time played, combats and downs, notes and open threads, and who's here. A quick-note box adds a note without a dialog (Thread / GM only ticks). The timeline shows the newest 100 events, newest first, with filter chips by kind (Scenes, Combat, Loot, Rests and world, Quests and travel, Notes).
+- **At the table** on the Session page: the connected players with their character's portrait. **On dnd5e, each character's hit points** (bar and value, temporary HP shown as +n) update live as they change. On other systems no HP is shown.
+- **Board** is a page with three columns: quests and the last session; NPCs, journals and scenes; your pins.
+- **Scene check** is a page: every scene on the left (search, a dot with its last result), the chosen scene's findings on the right, grouped by kind (map, tokens, images and sounds, notes and links, players). Results are kept in that browser tab until you reload; nothing new is saved to the world. `api.sceneCheck.run()` opens this page; `api.sceneCheck.results()` and `api.sceneCheck.open(sceneId)` are new (experimental).
+- **Session Start** is a small window of its own: a searchable scene list and a *Ready?* checklist (activate, unpause, start the log, who's here, and the scene check's result for that scene this load, with a Check button).
+- **Who's online panel**: a themed header with a count pill (for example 3/4). Drag it by the header (no longer the title text). A new **fold button** in the header folds the panel to its header; each browser remembers it (client setting `onlineHudCollapsed`). Tab to the button and press Enter or Space to fold or unfold. `api.online.toggleCollapsed(value?)` is new.
+- **Remove Red Book data › Reset settings** now also resets this browser's own client settings (the Who's online panel spot and fold).
+- New strings are in `lang/en.json` and can be translated.
+- Built on **wanderers-core 0.3.0** and its shared stylesheet (loaded before Red Book's own). CI uses core's checks v0.3.0.
+
+### Live test checklist (Untested in Foundry)
+
+Unit tests (86) cover the sidebar (pages, groups, one tab stop, muted tools, keyboard index), the old tab-name mapping, the timeline filter and its cap, the timeline rows, the dnd5e HP reading (null values, effectiveMax, temporary max, clamping) and the roster (players only, no HP off dnd5e, which actor changes refresh it), the session, board, scene check, Online, past sessions, settings, health, data and Session Start pages, the scene-check categories (display only) and results memory (cap), the Hub panel header and fold button, the new client setting and the reset covering it, every new string in `lang/en.json`, and the stylesheet order and scoping. Check these in a live v14 world (dnd5e 6.x), one GM and at least one player:
+
+**Look**
+- [ ] The Red Book window, Session Start and Who's online look like Foundry v14 in the **dark** theme and in the **light** theme (text readable, badges, banners and HP bars coloured, no stray backgrounds). Dialogs (End session, Quick note, Share as recap) still look right.
+- [ ] **Narrow window**: resize the Red Book window below about 720 px wide: the sidebar becomes a strip, the session columns, board and scene check stack, nothing is cut off. Make it short: pages scroll and no panel is squashed to nothing (this is the local **flex-shrink override**, `.rb-app … .wc-main > * { flex-shrink: 0 }`; drop it after core 0.3.1 and check again).
+
+**Window and keyboard**
+- [ ] The **Red Book** token-control button, Module Settings › *Open the control panel* and `api.panel()` open the window on the Session page. `api.panel("board")`, `api.panel("overview")` and `api.panel("start")` open Board, Session and Tool settings › Session Start. For a player, `api.panel()` warns "GM only".
+- [ ] **Keyboard nav**: Tab reaches the sidebar once; Arrow Up/Down, Home and End move between pages; Enter or Space opens one (and doesn't pause the game); after the page changes, focus stays on the sidebar.
+- [ ] Tools that are turned off show greyed in the sidebar with *Off*, and their page says so.
+
+**Session page**
+- [ ] No session: the banner offers Start and Session Start…. Start: the banner turns to *Session running* with a pulsing dot, the timeline fills in as you play, tiles count up.
+- [ ] Quick note: type and press Enter (or Add): it's logged once, the box empties. Thread and GM only ticks work. Ctrl+Shift+N still opens the note box.
+- [ ] Filter chips show their counts and only that kind; with more than 100 events, the newest 100 show with a hint.
+- [ ] **Roster HP live updates (dnd5e)**: damage and heal a connected player's character (sheet and token HUD): the bar and value update within a moment, temp HP shows +n; a player without a character shows *No character*. Many quick changes don't stutter. On a non-dnd5e world, no HP is shown at all. Nothing is written to the world (no document updates in the console).
+- [ ] End session from the banner: summary written as before; Past sessions lists it with Open and Share as recap.
+
+**Board**
+- [ ] Three columns at full width; dropping a document on *Pinned* pins it; unpin, view scene, check scene and Check all work; missing documents are struck through.
+
+**Scene check memory**
+- [ ] The clipboard button checks the viewed scene and opens the Scene check page on it. Pick other scenes on the left and check them; the dots and results stay while you move between scenes and pages. Close and reopen the window: still there. Reload: gone (nothing saved). On the player, `game.settings` has nothing new from Red Book.
+- [ ] Ignore, Un-ignore, Clear ignored, the wrench (open it) and Export to journal work as before; *Check all* fills every scene's dot. Tool settings › Scene check › *Clear all ignored warnings…* still works.
+- [ ] The Scenes sidebar's *Check readiness*, the board's check buttons and `api.sceneCheck.run({ all: true })` still work.
+
+**Session Start**
+- [ ] The flag button opens the small window. Typing filters the list; hidden-pattern scenes aren't listed; the viewed scene is chosen. *Ready?* shows who's here and the scene's check result, and Check runs it. Start activates, unpauses and starts the log; with a session open, the log box is greyed out. `api.sessionStart.open()` resolves to the result, or null when the window is closed.
+
+**Who's online**
+- [ ] On a Hub scene the panel has a header with *Who's online* and a count pill; it turns green when everyone's here.
+- [ ] **Who's online drag**: drag by the header (not by the fold button) moves it and it stays after reload; double-click the header puts it back.
+- [ ] **HUD collapse persistence**: the fold button folds and unfolds; reload: it stays folded in that browser only (another browser or player is unaffected). Keyboard: Tab to the button, Enter or Space folds it and doesn't pause the game. Remove Red Book data › Reset settings unfolds it again.
+- [ ] Online page and *Open as a window* show the same board; *Put the panel back* resets the spot.
+
 ## 0.3.0 (2026-11-01)
 
 ### Added

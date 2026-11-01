@@ -4,7 +4,7 @@ A Foundry VTT module (v13 and v14, any game system, extra support for dnd5e) tha
 
 Every tool can be turned off. A turned-off tool registers nothing.
 
-<!-- screenshot: the control panel Overview tab -->
+<!-- screenshot: the Red Book window, Session page -->
 
 ## Contents
 
@@ -36,7 +36,7 @@ Optional: with **Wayfarer's Toolkit** active, its quests feed the board and its 
 ## Quick start
 
 1. Install from the manifest URL `https://github.com/cocoomg11/red-book/releases/latest/download/module.json` and enable the module.
-2. As GM, open **Game Settings › Configure Settings › Red Book › Open the control panel**. The Overview tab shows what's working.
+2. As GM, click the **Red Book** button (open book) in the token controls, or **Game Settings › Configure Settings › Red Book › Open the control panel**. The window opens on the Session page; *Settings › Health* shows what's working.
 3. Click **Session Start** (the flag button in the token controls on the left): pick the scene, and Red Book activates it, unpauses and starts the session log. Play. Press **Ctrl+Shift+N** for a quick note.
    To show who's here, open a scene's configuration, go to the **Table Tools** tab and tick **Hub scene**.
 4. Click **End session**. Open the log in the *Session Log* journal folder, add anything to its *Notes* page, then click **Share as recap** in the journal's header menu.
@@ -46,7 +46,7 @@ Optional: with **Wayfarer's Toolkit** active, its quests feed the board and its 
 
 <!-- screenshot: a session log timeline page with its summary -->
 
-- **Start session / End session**: from the control panel's Overview, the book button in the token scene controls, or the API. When a GM loads the world with no session open, Red Book asks whether to start one (setting *Ask to start a session on load*).
+- **Start session / End session**: from the Red Book window's Session page, the book button in the token scene controls, or the API. When a GM loads the world with no session open, Red Book asks whether to start one (setting *Ask to start a session on load*).
 - Each session is a GM-only journal entry *Session N — date* in the *Session Log* folder, with a **Timeline** page (rebuilt from the recorded data as events come in: don't edit it) and a **Notes** page that is yours.
 - **Quick note** (key binding, default Ctrl+Shift+N, change it in Configure Controls): a small box. A note starting with `?` (or ticked *Open thread*) is an **open thread**: it's listed in the summary and on the board until you deal with it. Tick *GM only* (or write `#private`) to keep a note out of recaps.
 - What's logged (each group can be turned off under the Session log tab's Advanced section):
@@ -60,13 +60,13 @@ Optional: with **Wayfarer's Toolkit** active, its quests feed the board and its 
   - level-ups (dnd5e: total level; other systems: `system.details.level` when present);
   - Wayfarer's Toolkit: quests given, completed, failed, reopened, objectives ticked, flights and hex travel (from its Travel Log page), finished loot rolls.
 - **End session** adds a **summary** at the top: how long you played and how much in-world time passed, counts per kind, notable moments (kills, level-ups, quests, combats) and open threads (GM-only threads in a secret block).
-- **Share as recap** (journal header menu on a session log, or the control panel for the latest session): shows every list line of the session's pages with a tick box. Untick what players shouldn't see. Red Book then creates or updates a separate journal **Recap: <session name>** in the *Session Recaps* folder that players can observe. Secret blocks, GM-only notes, HTML comments and document links are always left out. The GM log itself is never made visible.
+- **Share as recap** (journal header menu on a session log, or the Red Book window's Past sessions page): shows every list line of the session's pages with a tick box. Untick what players shouldn't see. Red Book then creates or updates a separate journal **Recap: <session name>** in the *Session Recaps* folder that players can observe. Secret blocks, GM-only notes, HTML comments and document links are always left out. The GM log itself is never made visible.
 
 ## Next-session board
 
 <!-- screenshot: the board -->
 
-Open it with the thumbtack button in the token controls, the control panel or `api.board.open()`.
+Open it with the thumbtack button in the token controls, the Red Book window's **Board** page or `api.board.open()`. Three columns: quests and the last session; NPCs, journals and scenes; your pins.
 
 - **Active quests** (Wayfarer's Toolkit's quest log, when that module is active) with their next unticked objectives.
 - **NPCs, Journals, Scenes**: every document linked from those quests (giver, description, objectives), with the quests that link it. Deleted documents are shown struck through.
@@ -76,9 +76,9 @@ Open it with the thumbtack button in the token controls, the control panel or `a
 
 ## Scene readiness check
 
-<!-- screenshot: the results window -->
+<!-- screenshot: the Scene check page -->
 
-Run it from the clipboard button (the viewed scene), the control panel (*Check scenes…*: the viewed scene, one scene, a folder or every scene), the Scenes sidebar's right-click menu (*Check readiness*), the board, or `api.sceneCheck.run()`. It **never changes anything**. The whole scene check is **GM only**: players see no button or menu entry, and the API refuses them.
+Run it from the clipboard button (the viewed scene), the Red Book window's **Scene check** page (scene list on the left with each scene's last result, findings grouped by kind on the right; *Check all*), the Scenes sidebar's right-click menu (*Check readiness*), the board, or `api.sceneCheck.run()`. It **never changes anything**. The whole scene check is **GM only**: players see no button or menu entry, and the API refuses them.
 
 | Check | Severity |
 |---|---|
@@ -99,15 +99,15 @@ Run it from the clipboard button (the viewed scene), the control panel (*Check s
 | The scene's linked journal (and page) exists | problem |
 | Connected players have a character assigned | warning |
 
-**Ignoring a finding.** Each finding has an **Ignore** button (crossed-out eye). An ignored finding stops counting toward that scene's totals and moves into a collapsed **Ignored (n)** list under the scene, where **Un-ignore** brings it back. Ignores are saved on the scene itself (`flags.red-book.ignoredChecks`), so they survive reloads and never affect another scene. Each one is tied to that rule and that one thing: ignoring "no hit points" on one NPC token doesn't hide it on another. An ignore whose finding no longer comes up is kept but not shown. **Clear ignored** (in the scene's section) wipes one scene's list; **Clear all ignored warnings…** (control panel, Scene check tab) wipes every scene's after a confirm. GM only.
+**Ignoring a finding.** Each finding has an **Ignore** button (crossed-out eye). An ignored finding stops counting toward that scene's totals and moves into a collapsed **Ignored (n)** list under the scene, where **Un-ignore** brings it back. Ignores are saved on the scene itself (`flags.red-book.ignoredChecks`), so they survive reloads and never affect another scene. Each one is tied to that rule and that one thing: ignoring "no hit points" on one NPC token doesn't hide it on another. An ignore whose finding no longer comes up is kept but not shown. **Clear ignored** (in the scene's section) wipes one scene's list; **Clear all ignored warnings…** (Red Book window, *Tool settings › Scene check*) wipes every scene's after a confirm. GM only.
 
 Files are checked with a HEAD request to your Foundry server, a few at a time, with a time-out (a file that doesn't answer is reported as *couldn't be checked*, not missing), and remembered for five minutes. Files on other websites aren't checked. **Export to journal** writes the results to a GM-only *Scene check* journal (one page per scene, replaced on each export); ignored findings are listed separately, marked *ignored*. Every check can be turned off (Scene check tab, Advanced).
 
 ## Session Start
 
-Click the flag button in the token controls (GM), the control panel's **Session Start…**, or `api.sessionStart.open()`.
+Click the flag button in the token controls (GM), **Session Start…** on the Red Book window's Session page, or `api.sessionStart.open()`. A small window opens.
 
-- Pick the scene (the one you're viewing is selected), then tick or untick **Activate it for players**, **Unpause the game** and **Start the session log**. The last one is greyed out when a session is already open, and missing when the session log is turned off.
+- Pick the scene from the list (type to search; the one you're viewing is selected). Under **Ready?** tick or untick **Activate it for players**, **Unpause the game** and **Start the session log**. The last one is greyed out when a session is already open, and missing when the session log is turned off.
 - **Scenes left out of the list** (Session Start tab): a regular expression, for example `^(Test map|NPC gallery)$`. Matching scenes aren't offered. Blank offers every scene.
 
 ## Who's online
@@ -115,14 +115,20 @@ Click the flag button in the token controls (GM), the control panel's **Session 
 - **Hub scenes**: in a scene's configuration, open the **Table Tools** tab and tick **Hub scene (show who's online)** in the Red Book section. Everyone viewing that scene sees a small panel of the players: each one's character portrait and name, greyed out when not connected, plus anyone else online (GMs, players who don't count).
 - The panel says **x of y here**, then **Everyone's here** when all the players who count are connected.
 - **Who counts** (Who's online tab): every player user, players with an assigned character (default), or only the users you list (Advanced).
-- **Moving it**: drag the panel by its title. Each browser keeps its own spot, always on screen. Double-click the title to put it back where the *Panel position* setting says.
-- The control panel's **Who's online** button (or `api.online.open()`) opens the same board as a window, for anyone.
+- **Moving it**: drag the panel by its header. Each browser keeps its own spot, always on screen. Double-click the header to put it back where the *Panel position* setting says.
+- **Folding it**: the arrow button in the header (or Tab to it and press Enter or Space) folds the panel to its header, which still shows the count (for example 3/4). Each browser remembers its choice.
+- The Red Book window's **Online** page, its *Open as a window* button (or `api.online.open()`) opens the same board as a window, for anyone.
 - **Hooks for world scripts**: `red-book.playerCountChanged` fires whenever the count changes, and `red-book.allPlayersOnline` when everyone's here. They fire on every client, so a script that changes documents should check `game.users.activeGM?.isSelf`. Scripts written for Wayfarer's Toolkit keep working: the old names `wayfarers-toolkit.playerCountChanged` / `.allPlayersOnline` fire too, unless the toolkit still has its own Who's online (then the toolkit fires them) or you turn off *Also fire the old hook names*.
 - **Moving from Wayfarer's Toolkit**: on the GM's first load of 0.3.0, Red Book copies the toolkit's Who's online and Session Start settings and its Hub scene ticks. The toolkit's own data stays as it was. Turn the toolkit's copies of these tools off so you don't get two panels.
 
-## Control panel and settings
+## The Red Book window and settings
 
-Module Settings › Red Book › **Open the control panel**. Tabs: Overview (health and the main buttons), Features (one switch per tool; reloads), Session log, Next-session board, Scene check, Session Start, Who's online (each with an Advanced section where it has one), Data (Debug logging and Remove Red Book data). The control panel and every GM tool are GM only.
+The **Red Book** button in the token controls, or Module Settings › Red Book › **Open the control panel**. A sidebar on the left (arrow keys, Home and End move between pages; it becomes a strip in a narrow window):
+
+- **Tools**: **Session** (the start page: running or not, counts, a quick note box, the timeline with filters by kind, newest 100, and *At the table*: the connected players, with each character's hit points on dnd5e), **Board**, **Scene check**, **Online**, **Past sessions** (every session log, with open and share-as-recap).
+- **Settings**: **Features** (one switch per tool; reloads), **Tool settings** (pick a tool; Advanced section where it has one), **Health**, **Data** (Debug logging and Remove Red Book data).
+
+The window and every GM tool are GM only. It follows Foundry's light and dark themes.
 
 ## Several GMs or several tabs
 
@@ -134,8 +140,8 @@ Exactly one client records and writes: the active GM user's earliest-opened tab.
 - Scenes: the scene check's ignored findings (`flags.red-book.ignoredChecks`: `{ v, entries: [{ key, at, by, name }] }`, at most 500 per scene). Remove Red Book data's *flags* category removes them too.
 - A GM-only journal *Red Book data (GM only)* (`flags.red-book.store`: `{ v, pins, migrated }`; ownership None), holding the board's pins (versioned, at most 50). Before 0.3.0 the pins were in the world setting `boardPins`; the GM's first load moves them and empties the setting.
 - Scenes: the Hub scene tick (`flags.red-book.hubScene`).
-- World settings under `red-book.*`, including the open session id and `migrations` (what the one-time carry-over from the toolkit has done). One client setting per browser: `onlineHudPos` (where you dragged the Who's online panel).
-- **Remove Red Book data** (Module Settings, or the control panel's Data tab) shows a dry run with counts and names, then removes only the ticked categories after you type REMOVE.
+- World settings under `red-book.*`, including the open session id and `migrations` (what the one-time carry-over from the toolkit has done). Two client settings per browser: `onlineHudPos` (where you dragged the Who's online panel) and `onlineHudCollapsed` (whether you folded it). Scene-check results shown in the window are kept in that browser tab's memory only, until reload.
+- **Remove Red Book data** (Module Settings, or the Red Book window's Data page) shows a dry run with counts and names, then removes only the ticked categories after you type REMOVE.
 
 ## Public API and hooks
 
@@ -147,10 +153,10 @@ Exactly one client records and writes: the active GM user's earliest-opened tab.
 | `session.start()`, `session.end()`, `session.note(text, { thread, private })`, `session.noteDialog()`, `session.current()`, `session.list()`, `session.get(idOrEntry)`, `session.shareRecap(idOrEntry)` | stable |
 | `session.log(type, text, { refs, private })` (add an event from another module), `session.flush()` | experimental |
 | `board.open()`, `board.pins()`, `board.pin(uuid)`, `board.unpin(uuid)`, `board.model()`, `board.refresh()` | experimental |
-| `sceneCheck.run({ scenes, folder, all })`, `sceneCheck.chooser()`, `sceneCheck.checkOne(scene)`, `sceneCheck.exportReport(results)`, `sceneCheck.facts(scene)`, `sceneCheck.rules`, `sceneCheck.clearCache()`, `sceneCheck.ignored(scene)`, `sceneCheck.ignore(scene, key)`, `sceneCheck.unignore(scene, key)`, `sceneCheck.clearIgnored(scene)`, `sceneCheck.clearAllIgnored({ confirm })` (GM only: for other users every member warns "GM only" and returns undefined) | experimental |
+| `sceneCheck.run({ scenes, folder, all })`, `sceneCheck.chooser()`, `sceneCheck.checkOne(scene)`, `sceneCheck.exportReport(results)`, `sceneCheck.facts(scene)`, `sceneCheck.rules`, `sceneCheck.clearCache()`, `sceneCheck.ignored(scene)`, `sceneCheck.ignore(scene, key)`, `sceneCheck.unignore(scene, key)`, `sceneCheck.clearIgnored(scene)`, `sceneCheck.clearAllIgnored({ confirm })`, `sceneCheck.results()` (0.4.0: last result per scene this load), `sceneCheck.open(sceneId)` (0.4.0) (GM only: for other users every member warns "GM only" and returns undefined) | experimental |
 | `sessionStart.open()` (GM) | experimental |
-| `online.read()`, `online.open()`, `online.refresh()`, `online.resetPosition()`, `online.isHub(scene)`, `online.hooks`, `online.legacyHooks` (everyone) | experimental |
-| `panel(tab)`, `health()` (returns `[{ title, lines: [{ level, text }] }]`), `cleanup.plan()`, `cleanup.dryRun()`, `cleanup.remove(pick)`, `cleanup.open()` (GM only: for players they warn "GM only" and return undefined) | experimental |
+| `online.read()`, `online.open()`, `online.refresh()`, `online.resetPosition()`, `online.toggleCollapsed(value?)` (0.4.0; this browser), `online.isHub(scene)`, `online.hooks`, `online.legacyHooks` (everyone) | experimental |
+| `panel(page)` (0.4.0: opens the Red Book window on `session`, `board`, `check`, `online`, `past`, `features`, `tools`, `health` or `data`; the old tab names still work), `health()` (returns `[{ title, lines: [{ level, text }] }]`), `cleanup.plan()`, `cleanup.dryRun()`, `cleanup.remove(pick)`, `cleanup.open()` (GM only: for players they warn "GM only" and return undefined) | experimental |
 | `features.on(id)`, `features.list()`, `leader()`, `hooks` | experimental |
 
 Hooks (fired with `Hooks.callAll` on every client):
