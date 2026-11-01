@@ -36,6 +36,7 @@ export function sceneFacts(scene) {
     };
   });
   const playlist = scene.playlist;
+  /** @type {any} */
   const facts = {
     id: scene.id, uuid: scene.uuid, name: scene.name, background: backgroundOf(scene),
     gridType: scene.grid?.type ?? 1, tokenVision: !!scene.tokenVision,
@@ -70,6 +71,7 @@ async function probe(path) {
   if (res.status === 405) { const g = await fetch(url, { method: "GET", cache: "no-store", headers: { Range: "bytes=0-0" } }); return g.ok || g.status === 206; }
   return res.ok;
 }
+/** @type {any} */
 let CACHE = null;
 const cache = () => (CACHE ??= new C.PathCache({ probe, concurrency: Number(get("checkConcurrency")) || 4, timeout: (Number(get("checkTimeout")) || 4) * 1000 }));
 
@@ -120,6 +122,7 @@ export async function clearAllIgnored({ confirm = true } = {}) {
 }
 
 /** Which scenes: { scenes: [uuid | id | Scene], folder: id | Folder, all: true } (default: the viewed scene). */
+/** @param {{ scenes?: any[], folder?: any, all?: boolean }} [opts] */
 export function pick({ scenes, folder, all } = {}) {
   if (all) return game.scenes.contents;
   if (folder) {

@@ -31,6 +31,7 @@ export function store() {
   const open = Number(j.ownership?.default ?? 0) > 0 || Object.entries(j.ownership ?? {}).some(([u, l]) => u !== "default" && Number(l) > 0 && !game.users.get(u)?.isGM);
   return open ? { ok: false, text: `The "${j.name}" journal is visible to players: set its ownership back to None.` } : { ok: true, text: `Board pins: ${pinStore().pins.length}, kept in a GM-only journal.` };
 }
+/** @type {any} */
 let deps = { session: null, check: null };
 export function init(d) { deps = { ...deps, ...d }; }
 
@@ -57,9 +58,10 @@ export function model() {
 /** Adds the document dropped on the Pinned list (a drop event). Resolves true when a pin was added. */
 export async function dropPin(ev) {
   if (!game.user?.isGM) return false;
-  let d = null; try { d = UI.TextEditorImpl().getDragEventData(ev); } catch { }
+  /** @type {any} */ let d = null; try { d = UI.TextEditorImpl().getDragEventData(ev); } catch { }
   const uuid = d?.uuid; if (!uuid) return false;
   const doc = UI.safeSync(uuid);
+  /** @type {any} */
   const r = B.addPin(pinStore(), { uuid, type: d.type ?? doc?.documentName, name: doc?.name ?? "" });
   if (!r.added) { ui.notifications.warn(`Red Book: ${r.why}.`); return false; }
   await savePins({ v: r.v, pins: r.pins });

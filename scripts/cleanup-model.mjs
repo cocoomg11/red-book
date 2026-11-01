@@ -5,6 +5,7 @@
  */
 import { dryRun as coreDryRun, hasFlags } from "../vendor/wanderers-core/index.mjs";
 
+/** @type {[string, string, boolean][]} */
 export const CATEGORIES = [
   ["sessions", "Session log journals (the GM-only timelines and their notes pages)", false],
   ["store", "The GM-only data journal (the next-session board's pins)", false],
@@ -33,7 +34,9 @@ export function kindOf(entry) {
  * other document that may carry our flags), settings: [{ key, changed }] }. Returns { sessions, recaps, reports, flags, folders, settings },
  * each a list of { id | uuid | key, name }.
  */
+/** @param {any} [world] */
 export function plan(world = {}) {
+  /** @type {Record<string, any[]>} */
   const p = { sessions: [], recaps: [], reports: [], store: [], flags: [], folders: [], settings: [] };
   for (const j of world.journals ?? []) {
     const k = kindOf(j);
