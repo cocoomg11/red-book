@@ -10,6 +10,8 @@ import { esc, plain, plural } from "./const.mjs";
 export const SESSION_VERSION = 1;
 /** At most this many events are kept per session; notes and threads are never the ones dropped. */
 export const EVENTS_MAX = 1000;
+/** At most this many NPCs are remembered as met per session. */
+export const MET_MAX = 500;
 
 /** Event types: label (for the summary counts and settings), icon (Font Awesome), group (which setting turns it off). */
 export const TYPES = {
@@ -64,7 +66,7 @@ export function normalizeSession(raw = {}) {
     open: s.open === undefined ? !s.endedAt : !!s.open,
     events: (Array.isArray(s.events) ? s.events : []).filter(e => e && typeof e === "object").map(e => makeEvent(e)),
     dropped: Math.max(0, Number(s.dropped) || 0),
-    met: Array.isArray(s.met) ? [...new Set(s.met.map(String))] : [],
+    met: Array.isArray(s.met) ? [...new Set(s.met.map(String))].slice(-MET_MAX) : [],
     summary: s.summary && typeof s.summary === "object" ? s.summary : null,
     recap: String(s.recap ?? "")
   };
@@ -341,4 +343,19 @@ export function combatEndText({ round = 0, combatants = [], defeated = [] } = {}
   const who = combatants.length ? ` Combatants: ${combatants.join(", ")}.` : "";
   const down = defeated.length ? ` Defeated: ${defeated.join(", ")}.` : "";
   return `Combat ended after ${plural(Math.max(0, round), "round")}.${who}${down}`;
+}
+
+/** Adds NPC keys to the met list; returns the new ones (not met before this session) and the capped list. */
+export function meet(met = [], candidates = [], max = MET_MAX) {
+  const have = new Set(met); const fresh = [];
+  for (const c of candidates) { if (!c?.key || have.has(c.key)) continue; have.add(c.key); fresh.push(c); }
+  return { fresh, met: [...have].slice(-max) };
+}
+/** One line for NPCs met at once. */
+export const metText = names => names.length ? `Met ${names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`}.` : "";
+/** The open threads to carry forward: from the summary when ended, else from the events (open session). */
+export function openThreads(session) {
+  if (!session) return [];
+  if (!session.open && session.summary?.threads) return session.summary.threads;
+  return session.events.filter(e => e.type === "note" && e.thread).map(e => ({ id: e.id, text: e.text, private: e.private }));
 }
