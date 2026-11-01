@@ -330,7 +330,8 @@ export function groupFindings(findings = []) {
 }
 
 /**
- * The GM client's memory of the last scene-check result per scene (this browser tab, this load; never saved to the world).
+ * The GM client's memory of the last scene-check result per scene (this browser tab; never saved to the world). 0.8.0: check.mjs
+ * also keeps a copy in this browser's localStorage (packSaved / unpackSaved) and fills the memory from it on the first look.
  * Capped at `max` scenes (oldest dropped first).
  */
 export class ResultMemory {
@@ -347,4 +348,52 @@ export class ResultMemory {
   /** { [sceneId]: result } for the view. */
   all() { return Object.fromEntries(this.map); }
   get size() { return this.map.size; }
+}
+
+// ---------------------------------------------------------------- saved results (0.8.0: this browser's localStorage, never the world)
+/** The localStorage key for one world's saved scene-check results. */
+export const savedKey = worldId => `red-book.checkResults.${String(worldId ?? "")}`;
+/** Caps for the saved results: scenes kept, findings kept per scene, and the JSON size in characters. */
+export const SAVED_MAX = Object.freeze({ scenes: 200, findings: 300, chars: 1_000_000 });
+export const SAVED_VERSION = 1;
+
+const slimFinding = f => ({ rule: String(f?.rule ?? ""), severity: String(f?.severity ?? "note"), text: String(f?.text ?? "").slice(0, 500), key: String(f?.key ?? ""), fix: f?.fix && typeof f.fix === "object" ? { kind: String(f.fix.kind ?? ""), id: String(f.fix.id ?? "") } : null });
+
+/**
+ * The saved form of the memory: `{ v, scenes: { [sceneId]: { at, scene: { id, uuid, name }, all: [finding] } } }`. Pending and
+ * undated results, and scenes not in `sceneIds` (deleted), are left out; newest kept first when over `max.scenes`, and the oldest
+ * dropped until the JSON fits `max.chars`. Ignore state isn't saved (it's on the scene; applyIgnored re-reads it on load).
+ * @param {Record<string, any>} all ResultMemory.all() @param {{ sceneIds?: Iterable<string>, max?: Partial<typeof SAVED_MAX> }} [o]
+ * @returns {string}
+ */
+export function packSaved(all = {}, { sceneIds, max = {} } = {}) {
+  const m = { ...SAVED_MAX, ...max };
+  const keep = sceneIds ? new Set(sceneIds) : null;
+  let rows = Object.entries(all ?? {})
+    .filter(([id, r]) => r && !r.pending && Number(r.at) > 0 && (!keep || keep.has(id)))
+    .map(([id, r]) => /** @type {[string, any]} */ ([id, { at: Number(r.at), scene: { id: String(r.scene?.id ?? id), uuid: String(r.scene?.uuid ?? ""), name: String(r.scene?.name ?? "") }, all: (r.all ?? r.findings ?? []).slice(0, m.findings).map(slimFinding) }]))
+    .sort((a, b) => b[1].at - a[1].at)
+    .slice(0, m.scenes);
+  let text = JSON.stringify({ v: SAVED_VERSION, scenes: Object.fromEntries(rows) });
+  while (text.length > m.chars && rows.length) { rows = rows.slice(0, -1); text = JSON.stringify({ v: SAVED_VERSION, scenes: Object.fromEntries(rows) }); }
+  return text;
+}
+
+/**
+ * Reads saved results back: `{ [sceneId]: { at, scene, all } }` (not yet ignore-applied), dropping scenes not in `sceneIds` and
+ * anything malformed. Bad JSON or another version → {}.
+ * @param {string | null | undefined} text @param {{ sceneIds?: Iterable<string> }} [o]
+ */
+export function unpackSaved(text, { sceneIds } = {}) {
+  /** @type {any} */ let d = null;
+  try { d = JSON.parse(String(text ?? "")); } catch { return {}; }
+  if (!d || typeof d !== "object" || d.v !== SAVED_VERSION || !d.scenes || typeof d.scenes !== "object") return {};
+  const keep = sceneIds ? new Set(sceneIds) : null;
+  /** @type {Record<string, any>} */ const out = {};
+  for (const [id, r] of Object.entries(d.scenes)) {
+    if (keep && !keep.has(id)) continue;
+    if (!r || typeof r !== "object" || !(Number(r.at) > 0) || !Array.isArray(r.all)) continue;
+    out[id] = { at: Number(r.at), scene: { id, uuid: String(r.scene?.uuid ?? `Scene.${id}`), name: String(r.scene?.name ?? "") }, all: r.all.slice(0, SAVED_MAX.findings).map(slimFinding) };
+  }
+  return out;
 }

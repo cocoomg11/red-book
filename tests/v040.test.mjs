@@ -201,7 +201,7 @@ test("check page: master list with status dots, search, detail with grouped find
   ] }, { v: 1, entries: [{ key: "notes:n1", at: 1, by: "u", name: "Ann" }] });
   const html = V.checkPageHTML({ scenes: [{ id: "s1", name: "Cave" }, { id: "s2", name: "Hall" }], results: { s1: r, s2: { pending: true } }, selected: "s1", query: "" });
   noMissing(html);
-  assert.match(html, /class="active" data-name="cave"><button type="button" class="rb-scene-btn" data-action="pickScene" data-scene="s1" aria-current="true">/);
+  assert.match(html, /class="active" data-name="cave"><button type="button" class="rb-scene-btn" data-action="pickScene" data-scene="s1" title="Cave" aria-current="true">/);
   assert.match(html, /wc-dot wc-warn/); assert.match(html, /wc-dot wc-pending/);
   assert.match(html, /Map, walls and light/);
   assert.match(html, /data-action="ignore" data-scene="s1" data-key="walls"/);

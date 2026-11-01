@@ -55,14 +55,17 @@
 .rb-app .rb-drop.over { background: var(--wc-accent-bg); border-color: var(--wc-accent); }
 
 /* Scene check: master–detail */
-.rb-app .rb-md { display: grid; grid-template-columns: minmax(200px, 0.8fr) minmax(0, 1.6fr); gap: 12px; align-items: start; min-height: 0; }
+.rb-app .rb-md { display: grid; grid-template-columns: minmax(230px, 0.9fr) minmax(0, 1.6fr); gap: 12px; align-items: start; min-height: 0; }
 .rb-app .rb-master { border: 1px solid var(--wc-line); border-radius: var(--wc-radius); background: var(--wc-surface); overflow: hidden; }
 .rb-app .rb-search { padding: 8px; border-bottom: 1px solid var(--wc-line); }
 .rb-app .rb-search input { width: 100%; }
 .rb-app .rb-scene-list { max-height: 440px; overflow-y: auto; }
 .rb-app .rb-scene-list > li { padding: 0; } .rb-app .rb-scene-list > li[hidden] { display: none; }
 .rb-app .rb-scene-btn { all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 8px; width: 100%; min-height: 34px; padding: 3px 12px; font-family: var(--font-body, inherit); }
-.rb-app .rb-scene-btn .wc-hint { max-width: 45%; }
+.rb-app .rb-scene-btn .wc-hint { max-width: 40%; flex: none; }
+/* 0.8.0: scene names wrap to two lines, then ellipsis (the full name is the button's title) */
+.rb-app .rb-clamp2 { min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; line-height: 1.25; }
+.rb-app .rb-checked-at { white-space: nowrap; }
 .rb-app .rb-scene-btn:hover { background: var(--wc-surface-2); }
 .rb-app .rb-scene-btn:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: -2px; }
 .rb-app .rb-detail { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
@@ -143,3 +146,7 @@ body.theme-light .rb-online-hud { background: rgba(247, 243, 232, .96); box-shad
 .rb-app .rb-xp { width: 5.5em; flex: 0 0 auto; }
 .rb-app .rb-attend-add, .rb-app .rb-milestone-row { margin-top: 6px; }
 .rb-app .rb-milestone-row input { width: 100%; }
+
+/* 0.8.0: the quiet "Start a session?" banner (GM's browser, bottom centre above the hotbar) */
+.rb-start-banner { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); z-index: 100; display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 12px; max-width: calc(100vw - 32px); border: 1px solid var(--wc-line-strong, rgba(128, 128, 128, .5)); border-radius: var(--wc-radius, 6px); background: var(--wc-surface, #1d1d1d); color: var(--wc-text, inherit); box-shadow: 0 4px 16px rgba(0, 0, 0, .35); font-size: var(--font-size-13, 0.8125rem); }
+.rb-start-banner .rb-banner-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }

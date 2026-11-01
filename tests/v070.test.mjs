@@ -113,11 +113,11 @@ test("showModuleData and windowPlacement: hidden client records, skipped by the 
 });
 
 // ---------------------------------------------------------------- key bindings
-test("key bindings through core: same action ids and default keys as before, GM only", () => {
+test("key bindings through core: same action ids, Ctrl+Shift+N kept, GM only", () => {
   const q = defineOpenKeybinding({ ...KEYS.quickNote, onDown: () => {} });
   assert.equal(q.action, "quickNote"); assert.equal(q.gmOnly, true); assert.deepEqual(q.editable, [{ key: "KeyN", modifiers: ["Control", "Shift"] }]);
   const o = defineOpenKeybinding({ ...KEYS.openRedBook, onDown: () => {} });
-  assert.equal(o.action, "openRedBook"); assert.deepEqual(o.editable, []);
+  assert.equal(o.action, "openRedBook"); assert.deepEqual(o.editable, [{ key: "KeyR", modifiers: ["Shift"] }], "0.8.0: default Shift+R");
   for (const f of ["scripts/main.mjs", "scripts/session.mjs"]) assert.ok(!/game\.keybindings\.register/.test(read(f)), f);
 });
 

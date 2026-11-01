@@ -13,11 +13,12 @@ export const CATEGORIES = [
   ["reports", "Scene check report journals", true],
   ["flags", "Red Book flags on other documents, including ignored scene-check findings (the documents stay; only our flags go)", true],
   ["folders", "Folders Red Book made, once empty", true],
-  ["settings", "Reset Red Book's settings to defaults (feature toggles; this browser's Who's online panel spot and fold, window positions and Show module data; reloads)", false]
+  ["settings", "Reset Red Book's settings to defaults (feature toggles; this browser's Who's online panel spot and fold, window positions, Show module data, the start-a-session prompt and the saved scene-check results; reloads)", false]
 ];
 /**
  * Setting scopes "Reset Red Book's settings" covers: the world's, and this browser's client settings (onlineHudPos,
- * onlineHudCollapsed, 0.7.0: showModuleData and core's windowPlacement).
+ * onlineHudCollapsed, 0.7.0: showModuleData and core's windowPlacement, 0.8.0: startAsk). The scene check's saved results
+ * (localStorage, not a setting) are cleared with it: see cleanup.mjs.
  */
 export const SETTING_SCOPES = ["world", "client"];
 

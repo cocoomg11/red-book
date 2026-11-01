@@ -11,6 +11,9 @@ import { RULES, ruleKey } from "./check-model.mjs";
 import { FEATURE_KEYS } from "./features.mjs";
 import { COUNTS, POSITIONS } from "./online-model.mjs";
 
+/** 0.8.0: what a GM's browser does on load with no session open (setting `startAsk`). Keys never change. */
+export const START_ASK = Object.freeze({ ask: "Ask (a dialog)", quiet: "Quiet (a small banner with a Start button)", never: "Never" });
+
 export const TABS = [
   { id: "overview", label: "Overview", icon: "fa-solid fa-house" },
   { id: "features", label: "Features", icon: "fa-solid fa-toggle-on" },
@@ -28,7 +31,8 @@ const row = (tab, feature, key, type, def, label, hint, extra = {}) => ({ tab, f
 export const SETTINGS = defineSettings([
   row("session", "sessionLog", "sessionFolder", "text", "Session Log", "Session log folder", "Journal folder for the session logs (GM only). Made when the first session starts."),
   row("session", "sessionLog", "recapFolder", "text", "Session Recaps", "Recap folder", "Journal folder for the player recaps you share. Players get Observer on each recap."),
-  row("session", "sessionLog", "startPrompt", "bool", true, "Ask to start a session on load", "When a GM loads the world with no session open, ask whether to start one."),
+  // 0.8.0: per browser (client). Replaces the world switch startPrompt (kept below as a hidden record: its "off" is carried over once).
+  row("session", "sessionLog", "startAsk", "choice", "quiet", "Ask to start a session when the world loads", "When you load the world as GM with no session open. Ask: a dialog. Quiet: a small banner with a Start button that you can ignore. Never: nothing (start from the Session page or the token controls). Per browser.", { choices: { ...START_ASK }, client: true }),
   row("session", "sessionLog", "notePrompt", "bool", true, "Open a quick note box from the key binding", "The Quick note key (Configure Controls, default Ctrl+Shift+N) opens a small box. A note starting with ? is an open thread."),
   row("session", "sessionLog", "coalesceSeconds", "number", 8, "Group item and coin changes (seconds)", "Item and coin changes on one character within this many seconds of each other become one line.", { advanced: true, min: 2, max: 60, step: 1 }),
   row("session", "sessionLog", "timeMinMinutes", "number", 10, "Log world time once it adds up to (minutes)", "Small advances (combat rounds, short waits) are added up and logged once they reach this.", { advanced: true, min: 1, max: 1440, step: 1 }),
@@ -60,6 +64,8 @@ export const SETTINGS = defineSettings([
   // Hidden record settings (written by the module). boardPins is only read for the one-time move into the GM-only store (0.3.0)
   // and is kept registered so that move can read it; the key never changes.
   { key: "openSession", type: "text", default: "", hidden: true },
+  // Before 0.8.0 the visible world switch "Ask to start a session on load"; now only read once per browser (false → startAsk "never").
+  { key: "startPrompt", type: "bool", default: true, hidden: true },
   { key: "migrations", type: "object", default: { v: 1 }, hidden: true },
   { key: "onlineHudPos", type: "object", default: {}, hidden: true, client: true },
   // 0.4.0: the Hub panel folded to its header, per browser (the fold button in its header; not shown in the settings).
@@ -82,6 +88,21 @@ export const RECORDS = Object.freeze([...records(SETTINGS), PLACEMENT_KEY]);
 
 /** Settings of a tab, split into { basic, advanced } (rows of a turned-off tool are shown greyed out, so all are listed). */
 export const tabRows = tab => coreTabRows(SETTINGS, tab);
+
+/**
+ * Settings the Wanderer's Satchel never exports or imports: every hidden record, plus every client (per-browser) setting, since a
+ * settings file moves world choices between worlds, not one browser's habits (0.8.0: `startAsk`).
+ */
+export const SATCHEL_SKIP = Object.freeze([...new Set([...RECORDS, ...SETTINGS.filter(s => s.client).map(s => s.key)])]);
+
+/**
+ * 0.8.0: the once-per-browser carry-over of the old world switch. `legacy`: the world's `startPrompt`; `stored`: whether this
+ * browser already has a `startAsk` value. Returns "never" when the GM had turned the old prompt off and this browser hasn't chosen
+ * yet, else null (nothing to do).
+ */
+export const startAskCarry = (legacy, stored) => (legacy === false && !stored ? "never" : null);
+/** The `startAsk` value in force ("ask", "quiet" or "never"; anything else is the default "quiet"). */
+export const startMode = v => (Object.hasOwn(START_ASK, String(v)) ? String(v) : "quiet");
 
 /** A form value converted to the setting's type, clamped; null when it can't be read (the old value is kept). */
 export const convert = (s, raw) => coreConvert(s, raw);

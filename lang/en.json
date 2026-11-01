@@ -103,7 +103,6 @@
       "export": "Export to journal",
       "checking": "Checking…",
       "notChecked": "Not checked",
-      "memory": "Results are kept until you reload, on this browser only.",
       "fix": "Open it",
       "ignore": "Ignore on this scene",
       "unignore": "Un-ignore",
@@ -119,7 +118,12 @@
         "links": "Notes and links",
         "players": "Players",
         "other": "Other"
-      }
+      },
+      "saved": "The last result per scene is kept in this browser only (never in the world).",
+      "checkedAt": "Checked {time}",
+      "clearSaved": "Clear saved results",
+      "clearSavedTitle": "Clear saved results",
+      "clearSavedHint": "Forget the scene-check results saved in this browser for this world? Ignored findings (saved on the scenes) stay."
     },
     "Online": {
       "title": "Who's online",
@@ -207,7 +211,10 @@
       "allOnBoard": "Every failure is on the board.",
       "onBoard": "On the next-session board",
       "done": "Done (take off the list)",
-      "none": "Nothing to fix. Send failed findings here from the Scene check page."
+      "none": "Nothing to fix. Send failed findings here from the Scene check page.",
+      "count": "{n} to do",
+      "countMax": "{n} to do · max {max}",
+      "cap": "The list holds up to {max} items; Done takes an item off."
     },
     "Next": {
       "title": "Next session",
@@ -268,6 +275,14 @@
       "items": "Items",
       "xpGm": "Experience awarded (GM only)",
       "seen": "first seen"
+    },
+    "Prompt": {
+      "title": "Start a session?",
+      "body": "No session is open. Start one now? While it's open, Red Book keeps a timeline of what happens.",
+      "never": "Don't ask again in this browser",
+      "neverDone": "you won't be asked again in this browser. Change it under Session log › Ask to start a session when the world loads.",
+      "quiet": "No session is open.",
+      "dismiss": "Not now"
     }
   }
 }

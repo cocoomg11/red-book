@@ -1,8 +1,8 @@
 /**
  * Scene readiness check (feature "sceneCheck"): read-only. sceneFacts() reads a scene into plain facts, the path cache asks the
  * server whether each file loads, and check-model.mjs turns the facts into findings. A results window lists each scene's findings
- * with a jump-to-fix button (the Red Book window's Scene check page, 0.4.0: master–detail, last results kept in this tab's memory
- * only); Export writes the report to a GM-only journal. Nothing in the checked scenes is ever changed, except
+ * with a jump-to-fix button (the Red Book window's Scene check page, 0.4.0: master–detail; 0.8.0: the last result per scene is
+ * also kept in this browser's localStorage, never in the world); Export writes the report to a GM-only journal. Nothing in the checked scenes is ever changed, except
  * the GM's own list of ignored findings (flags.red-book.ignoredChecks on the scene, written only on a GM's click).
  */
 import { ID, MATT_ID, TOOLKIT_ID, esc } from "./const.mjs";
@@ -11,6 +11,7 @@ import { get } from "./core.mjs";
 import { offRules } from "./settings-model.mjs";
 import * as UI from "./ui.mjs";
 import * as Panel from "./panel.mjs";
+import { t } from "./i18n.mjs";
 
 const safe = UI.safeSync;
 const exists = uuid => !!safe(uuid);
@@ -82,7 +83,7 @@ export async function checkOne(scene) {
   const res = await cache().checkAll(paths);
   const players = game.users.filter(u => u.active && !u.isGM).map(u => ({ id: u.id, name: u.name, hasCharacter: !!u.character }));
   const all = C.checkScene(f, { paths: res, off: offRules(get), players, dnd5e: game.system.id === "dnd5e", matt: !!game.modules.get(MATT_ID)?.active });
-  return C.applyIgnored({ scene: { id: scene.id, uuid: scene.uuid, name: scene.name }, all }, ignoredOf(scene));
+  return C.applyIgnored({ scene: { id: scene.id, uuid: scene.uuid, name: scene.name }, all, at: Date.now() }, ignoredOf(scene));
 }
 
 // ---------------------------------------------------------------- ignored findings (GM only; stored on the scene)
@@ -135,22 +136,50 @@ export function pick({ scenes, folder, all } = {}) {
 }
 
 // ---------------------------------------------------------------- results memory (GM client only; never saved to the world)
-/** The last result per scene, kept in this tab's memory until reload. */
+/**
+ * The last result per scene for this browser. 0.8.0: also saved in this browser's localStorage (one key per world, capped by
+ * C.SAVED_MAX, deleted scenes pruned), so results survive a reload; never in a world setting or flag. Loaded on the first look.
+ */
 const MEMORY = new C.ResultMemory();
-export const memory = () => MEMORY;
+let loaded = false;
+const storage = () => { try { return globalThis.localStorage ?? null; } catch { return null; } };
+const sceneIds = () => game.scenes.map(s => s.id);
+/** Fills the memory from this browser's saved results once per load (ignore state re-read from each scene). */
+function loadSaved() {
+  if (loaded) return; loaded = true;
+  /** @type {string | null | undefined} */ let text = null; try { text = storage()?.getItem(C.savedKey(game.world?.id)); } catch { }
+  if (!text) return;
+  for (const [id, r] of Object.entries(C.unpackSaved(text, { sceneIds: sceneIds() }))) if (!MEMORY.get(id)) MEMORY.set(id, C.applyIgnored(r, ignoredOf(id)));
+}
+/** Writes the memory to this browser's localStorage (errors, e.g. a full or blocked storage, are a console warning only). */
+function save() {
+  try { storage()?.setItem(C.savedKey(game.world?.id), C.packSaved(MEMORY.all(), { sceneIds: sceneIds() })); } catch (e) { console.warn(`${ID} | saving scene-check results`, e); }
+}
+export const memory = () => { loadSaved(); return MEMORY; };
+/** 0.8.0: forgets every saved and remembered result in this browser (after a confirm unless `confirm: false`). */
+export async function clearSaved({ confirm = true } = {}) {
+  if (!UI.gmOnly()) return null;
+  if (confirm && !(await UI.confirm(t("Check.clearSavedTitle"), `<p>${UI.escText(t("Check.clearSavedHint"))}</p>`))) return null;
+  MEMORY.clear(); loaded = true;
+  try { storage()?.removeItem(C.savedKey(game.world?.id)); } catch { }
+  Panel.refresh("check");
+  return true;
+}
+/** For cleanup: drop this world's saved results in this browser (no confirm, no refresh). */
+export function forgetSaved() { MEMORY.clear(); try { storage()?.removeItem(C.savedKey(game.world?.id)); } catch { } }
 
 /** Checks one scene into memory and refreshes the window (`fresh`: ask the server about every file again). Resolves to the result. */
 export async function checkInto(sceneRef, { fresh = false } = {}) {
   if (!UI.gmOnly()) return null;
   const s = sceneOf(sceneRef); if (!s) return null;
   if (fresh) cache().clear();
-  MEMORY.pending(s.id); Panel.refresh("check");
+  loadSaved(); MEMORY.pending(s.id); Panel.refresh("check");
   let r;
   try { r = await checkOne(s); } catch (e) { r = failed(s, e); }
-  MEMORY.set(s.id, r); Panel.refresh("check");
+  MEMORY.set(s.id, r); save(); Panel.refresh("check");
   return r;
 }
-const failed = (s, e) => ({ scene: { id: s.id, uuid: s.uuid, name: s.name }, findings: [{ rule: "background", severity: "note", text: `Couldn't check this scene: ${e?.message ?? e}`, fix: null, key: "" }], ignored: [], stored: 0, tally: { problem: 0, warning: 0, note: 1 } });
+const failed = (s, e) => ({ scene: { id: s.id, uuid: s.uuid, name: s.name }, at: 0, findings: [{ rule: "background", severity: "note", text: `Couldn't check this scene: ${e?.message ?? e}`, fix: null, key: "" }], ignored: [], stored: 0, tally: { problem: 0, warning: 0, note: 1 } });
 
 /**
  * Runs the check on the picked scenes and opens the Red Book window's Scene check page on the first scene (the first with a
@@ -160,6 +189,7 @@ export async function run(opts = {}) {
   if (!UI.gmOnly()) return null;
   const list = pick(opts);
   if (!list.length) { ui.notifications.warn("Red Book: no scenes to check."); return []; }
+  loadSaved();
   for (const s of list) MEMORY.pending(s.id);
   Panel.openCheck(list[0].id);
   const results = [];
@@ -167,6 +197,7 @@ export async function run(opts = {}) {
     let r; try { r = await checkOne(s); } catch (e) { r = failed(s, e); }
     MEMORY.set(s.id, r); results.push(r); Panel.refresh("check");
   }
+  save();
   const first = results.find(r => r.tally.problem) ?? results[0];
   if (list.length > 1 && first) Panel.openCheck(first.scene.id);
   return results;
@@ -174,6 +205,7 @@ export async function run(opts = {}) {
 
 /** Re-applies each remembered scene's ignore store (no new check) and refreshes the window. */
 export function refreshIgnored() {
+  loadSaved();
   for (const [id, r] of Object.entries(MEMORY.all())) if (r?.all) MEMORY.set(id, C.applyIgnored(r, ignoredOf(id)));
   Panel.refresh("check");
 }
@@ -183,7 +215,7 @@ export function ignoreAndRefresh(p) {
 }
 /** Jump-to-fix for the i-th finding (or ignored finding) of a remembered result. */
 export function fixFinding(sceneId, i, ignored = false) {
-  const r = MEMORY.get(sceneId); if (!r || r.pending) return undefined;
+  const r = memory().get(sceneId); if (!r || r.pending) return undefined;
   return fix(sceneId, (ignored ? r.ignored : r.findings)?.[i]?.fix);
 }
 
@@ -256,8 +288,10 @@ export function contextOptions(options) {
 const apiRaw = {
   run, chooser, checkOne, facts: sceneFacts, exportReport, rules: C.RULES, clearCache: () => cache().clear(),
   ignored: scene => C.normalizeIgnored(ignoredOf(scene)).entries, ignore, unignore, clearIgnored, clearAllIgnored,
-  /** Experimental (0.4.0): the last result per scene this load ({ sceneId: result }). */
-  results: () => MEMORY.all(), open: sceneId => Panel.openCheck(sceneId)
+  /** Experimental (0.4.0): the last result per scene ({ sceneId: result }); 0.8.0: includes results saved in this browser (`at`: ms). */
+  results: () => memory().all(), open: sceneId => Panel.openCheck(sceneId),
+  /** Experimental (0.8.0): forget the saved results in this browser ({ confirm }). */
+  clearSaved
 };
 /** Scene check is GM-only: non-GM users get a "GM only" notice and undefined from every member. */
 export const api = C.gateApi(apiRaw, () => !!game.user?.isGM, () => ui.notifications.warn("Red Book: GM only."));

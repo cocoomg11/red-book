@@ -12,10 +12,11 @@ import { registerOpenKeybinding } from "../vendor/wanderers-core/foundry/index.m
 import { KEYS } from "./features.mjs";
 import { rangeText } from "./time-model.mjs";
 import { F, L, get, set, log, warn } from "./core.mjs";
-import { offGroups } from "./settings-model.mjs";
+import { offGroups, startMode, startAskCarry } from "./settings-model.mjs";
 import * as UI from "./ui.mjs";
 import { gateApi } from "./check-model.mjs";
 import { t } from "./i18n.mjs";
+import * as V from "./view.mjs";
 
 const TK = TOOLKIT_ID;
 const hasProp = (o, p) => foundry.utils.hasProperty(o, p);
@@ -37,8 +38,21 @@ const timelinePage = j => j?.pages.find(p => p.flags?.[ID]?.timeline) ?? null;
 
 // ---------------------------------------------------------------- time stamps
 const rtText = (ms = Date.now()) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+/**
+ * The in-world date for a log line, or "" when the world has no real calendar (0.8.0: core's default calendar at year 0, which
+ * would print "0000-01-01 13:30:06"). The real-time clock is kept either way.
+ */
 function wtText(t = game.time.worldTime) {
-  try { const c = game.time.calendar; if (c?.format) return c.format(t); } catch { }
+  try {
+    const c = game.time.calendar; if (!c?.format) return "";
+    /** @type {any} */ const def = foundry.data?.SIMPLIFIED_GREGORIAN_CALENDAR_CONFIG;
+    /** @type {any} */ const cfg = CONFIG.time?.worldCalendarConfig;
+    const isDefault = !cfg || cfg === def || (!!def?.name && cfg?.name === def.name);
+    /** @type {number | null} */ let year = null; try { year = Number(c.timeToComponents?.(t)?.year); if (!Number.isFinite(year)) year = null; } catch { }
+    if (!M.hasWorldCalendar({ isDefault, year })) return "";
+    const text = c.format(t);
+    return M.YEAR_ZERO_RE.test(text) ? "" : text;
+  } catch { }
   return "";
 }
 
@@ -586,7 +600,7 @@ export function ready() {
   L.onLeader(() => {
     if (!migrated) { migrated = true; migrateTimes().catch(e => warn("0.6.0 time migration", e)); }
     const j = openEntry(); if (j && R.entry?.id !== j.id) load(j);
-    if (!prompted && !j && get("startPrompt") !== false) { prompted = true; promptStart(); }
+    if (!prompted && !j) { prompted = true; promptStart(); }
     else prompted = true;
     scanSoon();
   });
@@ -609,12 +623,60 @@ async function migrateTimes() {
 }
 
 const PROMPT_ID = `${ID}-start-prompt`;
+const BANNER_ID = `${ID}-start-banner`;
+
+/** 0.8.0: once per browser, a GM who had turned the old world switch off gets Never here (never overrides a choice made here). */
+// Client settings live in this browser's localStorage under "<module>.<key>" (game.settings.storage "client").
+function carryStartAsk() {
+  let stored = false;
+  try { stored = game.settings.storage.get("client")?.getItem?.(`${ID}.startAsk`) != null; } catch { stored = true; }
+  const v = startAskCarry(get("startPrompt"), stored);
+  if (v) set("startAsk", v).catch(e => warn("startAsk carry-over", e));
+  return v;
+}
+
+/** The dialog (Ask): Yes / No plus "Don't ask again" (sets this browser to Never). Resolves true to start. */
+async function askDialog() {
+  const box = form => !!form?.elements?.rbNever?.checked;
+  const v = await UI.confirm(t("Prompt.title"), `<p>${UI.escText(t("Prompt.body"))}</p><div class="form-group"><label class="rb-check"><input type="checkbox" name="rbNever"> ${UI.escText(t("Prompt.never"))}</label></div>`, {
+    id: PROMPT_ID,
+    yes: { callback: (ev, button) => ({ yes: true, never: box(button?.form) }) },
+    no: { callback: (ev, button) => ({ yes: false, never: box(button?.form) }) }
+  });
+  const a = M.promptAnswer(v);
+  if (a.never) { await set("startAsk", "never"); ui.notifications.info(`Red Book: ${t("Prompt.neverDone")}`); }
+  return a.start;
+}
+
+/** The quiet banner (Quiet): a small strip with Start and a close button; resolves true on Start, null when closed. */
+function askBanner() {
+  document.getElementById(BANNER_ID)?.remove();
+  return new Promise(resolve => {
+    const el = document.createElement("aside");
+    el.id = BANNER_ID; el.className = ["rb-start-banner", UI.WINDOW, ...UI.UI_CLASSES].join(" ");
+    el.setAttribute("role", "status");
+    el.innerHTML = V.startBannerHTML();
+    el.addEventListener("click", ev => {
+      const b = /** @type {any} */ (ev.target)?.closest?.("[data-rb-banner]"); if (!b) return;
+      ev.preventDefault(); ev.stopPropagation();
+      el.remove(); resolve(b.dataset.rbBanner === "start" ? true : null);
+    });
+    el.addEventListener("rb-close", () => { el.remove(); resolve(null); });
+    document.body.appendChild(el);
+  });
+}
+
 /** The load prompt. Closed (and a late Yes ignored) when a session starts another way: panel, token button, API or another tab. */
 function promptStart() {
+  const mode = carryStartAsk() ?? startMode(get("startAsk"));
+  if (mode === "never") return Promise.resolve(false);
   return M.startPrompt({
-    ask: () => UI.confirm("Start a session?", "<p>No session is open. Start one now? While it's open, Red Book keeps a timeline of what happens.</p>", { id: PROMPT_ID }),
+    ask: mode === "ask" ? askDialog : askBanner,
     subscribe: fn => { const hid = Hooks.on(HOOKS.sessionStarted, fn); return () => Hooks.off(HOOKS.sessionStarted, hid); },
-    close: () => foundry.applications.instances?.get?.(PROMPT_ID)?.close?.(),
+    close: () => {
+      foundry.applications.instances?.get?.(PROMPT_ID)?.close?.();
+      document.getElementById(BANNER_ID)?.dispatchEvent(new Event("rb-close"));
+    },
     isOpen: () => !!openEntry(),
     start: () => L.request("start")
   });

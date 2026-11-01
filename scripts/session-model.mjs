@@ -604,7 +604,7 @@ export function whenText(e, o = {}) {
 }
 /** @UUID links for an event's refs are added after the text when it doesn't already name them. */
 function lineHTML(e, o = {}) {
-  const when = [whenText(e, o), e.wtText].filter(Boolean).map(esc).join(" · ");
+  const when = [whenText(e, o), worldTimeText(e)].filter(Boolean).map(esc).join(" · ");
   const tag = e.thread ? ` <strong>[thread]</strong>` : "";
   const links = e.refs.length ? ` ${e.refs.slice(0, 6).map(u => `@UUID[${u}]`).join(" ")}` : "";
   return `${when ? `<span class="rb-when">${when}</span> ` : ""}${esc(e.text)}${tag}${links}`;
@@ -822,6 +822,28 @@ export async function startPrompt({ ask, subscribe, close = () => { }, isOpen = 
     if (!ok || started || isOpen()) return false;
     start(); return true;
   } finally { try { off(); } catch { } }
+}
+
+/**
+ * 0.8.0: whether the world has a real calendar date to show next to the clock. Foundry always has a calendar; a world nobody set
+ * up uses core's default one at year 0 (its timestamps read "0000-01-01 13:30:06"). `isDefault`: the world calendar is core's
+ * default configuration; `year`: the current year from the calendar (null when it can't be read).
+ * @param {{ isDefault?: boolean, year?: number | null }} [o]
+ */
+export const hasWorldCalendar = ({ isDefault = false, year = null } = {}) => !(isDefault && (year === null || Number(year) <= 0));
+/** A year-0 timestamp ("0000-01-01 13:30:06", "0-01-01 …"): no calendar was set when the event was logged. */
+export const YEAR_ZERO_RE = /^\s*0{1,4}-\d{1,2}-\d{1,2}(?:\b|T)/;
+/** The in-world time to show for an event: "" when it's blank or a year-0 default timestamp (events from before 0.8.0). */
+export const worldTimeText = e => { const w = String(e?.wtText ?? ""); return !w || YEAR_ZERO_RE.test(w) ? "" : w; };
+
+/**
+ * 0.8.0: the answer of the load dialog (DialogV2 confirm with a "Don't ask again" box): the buttons return `{ yes, never }`; a closed
+ * dialog returns null. `{ start, never }`: start a session now; switch this browser's prompt to Never.
+ */
+export function promptAnswer(v) {
+  if (v === true || v === false) return { start: v, never: false };
+  if (!v || typeof v !== "object") return { start: false, never: false };
+  return { start: v.yes === true, never: v.never === true };
 }
 
 /**

@@ -21,7 +21,7 @@ import * as Previously from "./previously.mjs";
 import * as Timer from "./timer.mjs";
 import { report, satchelFixes } from "./health.mjs";
 import { registration, registerWith, SATCHEL_ID } from "./satchel-model.mjs";
-import { RECORDS } from "./settings-model.mjs";
+import { SATCHEL_SKIP } from "./settings-model.mjs";
 import { KEYS } from "./features.mjs";
 import { registerOpenKeybinding, hideDataFolder, registerWindowPlacement } from "../vendor/wanderers-core/foundry/index.mjs";
 
@@ -44,7 +44,7 @@ Hooks.once("init", () => {
   if (F.on("whosOnline")) Online.init();
   // 0.7.0: core hides the shared "Module data" journal folder (the GM-only store lives there) unless a "Show module data" switch is on.
   hideDataFolder(ID, { shown: () => get("showModuleData") === true });
-  // 0.5.0: Open Red Book (GM). No default key: the GM picks one in Configure Controls.
+  // 0.5.0: Open Red Book (GM). 0.8.0: default Shift+R (change it in Configure Controls).
   if (F.on("openKey")) registerOpenKeybinding({ moduleId: ID, ...KEYS.openRedBook, precedence: CONST.KEYBINDING_PRECEDENCE.NORMAL, onDown: () => { Panel.open(); } });
 
   Hooks.on("getSceneControlButtons", controls => {
@@ -91,6 +91,11 @@ Hooks.once("ready", () => {
     get previously() { return F.on("sessionLog") && F.on("previously") ? PreviouslyApi : undefined; },
     /** 0.5.0: the next session's date (ms, 0 = not set); readable by everyone (it's a world setting). */
     nextSession: () => normalizeNext(get("nextSession")).at,
+    /**
+     * 0.8.0, GM only: opens (or brings forward) the Red Book window, optionally on a page (same pages as panel()). The launcher
+     * entry point for hubs such as the Wanderer's Satchel.
+     */
+    open: page => Panel.open(page),
     /** GM only: opens the Red Book window, on a page (session, board, check, online, past, features, tools, health, data) or an old tab name. */
     panel: page => Panel.open(page),
     /** GM only: the read-only health report ([{ title, lines }]); undefined for players. */
@@ -102,7 +107,7 @@ Hooks.once("ready", () => {
   };
   // Wanderer's Satchel (optional GM hub): register when it's active. Its calls run on a GM's client only.
   registerWith(registration({
-    id: ID, title: "Red Book", openPanel: () => Panel.open(), health: () => report(deps), records: RECORDS, debugKey: "debugLog", fixes: satchelFixes()
+    id: ID, title: "Red Book", openPanel: () => Panel.open(), health: () => report(deps), records: SATCHEL_SKIP, debugKey: "debugLog", fixes: satchelFixes()
   }), {
     active: () => !!game.modules.get(SATCHEL_ID)?.active, api: () => game.modules.get(SATCHEL_ID)?.api,
     once: (h, fn) => Hooks.once(h, fn), warn: (m, e) => warn(m, e)

@@ -10,7 +10,7 @@ test("every check rule and log group has a setting; keys unique", () => {
   assert.equal(new Set(keys).size, keys.length);
   for (const r of Object.keys(RULES)) assert.ok(keys.includes(`check-${r}`));
   for (const g of Object.keys(GROUPS)) assert.ok(keys.includes(`log-${g}`));
-  assert.deepEqual(S.RECORDS, ["openSession", "migrations", "onlineHudPos", "onlineHudCollapsed", "boardPins", "nextSession", "previouslySeen", "showModuleData", "windowPlacement"]);
+  assert.deepEqual(S.RECORDS, ["openSession", "startPrompt", "migrations", "onlineHudPos", "onlineHudCollapsed", "boardPins", "nextSession", "previouslySeen", "showModuleData", "windowPlacement"]);
 });
 test("tab rows and conversion", () => {
   const { basic, advanced } = S.tabRows("check");

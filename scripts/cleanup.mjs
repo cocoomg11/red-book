@@ -6,7 +6,7 @@ import { ID, esc } from "./const.mjs";
 import * as M from "./cleanup-model.mjs";
 import * as UI from "./ui.mjs";
 import * as Store from "./store.mjs";
-import { gateApi } from "./check-model.mjs";
+import { gateApi, savedKey } from "./check-model.mjs";
 import { confirmed, changedSettings } from "../vendor/wanderers-core/index.mjs";
 import { flaggedDocuments, unsetFlags, resetSettings, settingValues, RememberedWindow } from "../vendor/wanderers-core/foundry/index.mjs";
 
@@ -36,7 +36,11 @@ export async function remove(pick = {}) {
   if (pick.store && p.store.length) done.store = await Store.remove();
   if (pick.flags) done.flags = await unsetFlags(ID, p.flags.map(f => f.uuid));
   if (folders.length) { try { await Folder.deleteDocuments(folders.map(f => f.id)); done.folders = folders.length; } catch (e) { console.warn(`${ID} | remove folders`, e); } }
-  if (pick.settings) done.settings = await resetSettings(ID, p.settings.map(s => s.key));
+  if (pick.settings) {
+    done.settings = await resetSettings(ID, p.settings.map(s => s.key));
+    // 0.8.0: this browser's saved scene-check results (localStorage, not a setting) go with this browser's settings.
+    try { globalThis.localStorage?.removeItem(savedKey(game.world?.id)); } catch { }
+  }
   return done;
 }
 

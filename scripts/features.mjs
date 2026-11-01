@@ -15,7 +15,7 @@ export const FEATURE_LIST = [
   { id: "questEvents", label: "Quest events in the log", hint: "While a session is open, quests given, completed or failed and objectives ticked (from the companion toolkit) become timeline lines and show in the summary and the recap. Each change is logged once, even when the toolkit reports it twice.", needs: ["sessionLog"] },
   { id: "journeys", label: "Journeys in the log", hint: "While a session is open, the companion toolkit's hex trips and flights become Travel lines on the timeline (from, to, hours and cost), with their own filter.", needs: ["sessionLog"] },
   { id: "prepList", label: "Prep list from the scene check", hint: "Send failed scene-check findings to the next-session board (one at a time or all failures of a scene), as a to-do list that links back to each scene.", needs: ["prepBoard", "sceneCheck"] },
-  { id: "openKey", label: "Open Red Book key binding", hint: "A key binding (Configure Controls › Red Book, GM only) that opens the Red Book window. No key is set until you pick one." },
+  { id: "openKey", label: "Open Red Book key binding", hint: "A key binding (Configure Controls › Red Book, GM only) that opens the Red Book window. Default Shift+R (0.8.0); change it in Configure Controls." },
   // 0.6.0
   { id: "previously", label: "\"Previously on…\" card", hint: "When a session starts (and whenever you click Show), players see the last recap you shared as a title card they can dismiss. Each browser remembers which recap it has seen. You can preview it first; only the shared, player-safe recap is shown.", needs: ["sessionLog"] },
   { id: "npcsMet", label: "NPCs met this session", hint: "Non-player tokens that appear on the active scene, or a scene a player is viewing, while a session runs are listed once each (name, first seen, scene) as Met lines on the timeline and an NPCs met list in the recap. Hidden tokens count once revealed. You can take one out (a hidden ambusher, a wrong token).", needs: ["sessionLog"] },
@@ -30,9 +30,10 @@ export const FEATURE_KEYS = FEATURES.map(f => f.key);
 
 /**
  * Key bindings (0.7.0: registered through core's `registerOpenKeybinding`; checked by core's `defineOpenKeybinding` in the tests).
- * Action ids and default keys never change, so the keys users picked in Configure Controls stay. Both GM only.
+ * Action ids never change, so the keys users picked in Configure Controls stay. Both GM only. 0.8.0: openRedBook gets the default
+ * Shift+R (core and dnd5e bind nothing to it; a key a user already picked still wins). Default keys don't change after that.
  */
 export const KEYS = Object.freeze({
   quickNote: Object.freeze({ action: "quickNote", name: "Quick note", hint: "Opens a small box to add a note to the open session (GM). Start the note with ? to make it an open thread.", gmOnly: true, editable: [{ key: "KeyN", modifiers: ["Control", "Shift"] }] }),
-  openRedBook: Object.freeze({ action: "openRedBook", name: "Open Red Book", hint: "Opens the Red Book window (GM).", gmOnly: true, editable: [] })
+  openRedBook: Object.freeze({ action: "openRedBook", name: "Open Red Book", hint: "Opens the Red Book window (GM).", gmOnly: true, editable: [{ key: "KeyR", modifiers: ["Shift"] }] })
 });

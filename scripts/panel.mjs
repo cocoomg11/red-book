@@ -169,6 +169,7 @@ export class RedBookApp extends RememberedWindow(foundry.applications.api.Applic
       }
       case "checkAll": return C?.run({ scenes: B.model().links.scenes.map(e => e.uuid) });
       case "checkAllScenes": return C?.run({ all: true });
+      case "clearSavedChecks": return C?.clearSaved();
       case "pickScene": this.check.selected = d.scene; this.render(); return;
       case "exportCheck": { const r = C?.memory().get(d.scene); return r && !r.pending ? C.exportReport([r]) : undefined; }
       case "fix": return C?.fixFinding(d.scene, Number(d.i), d.ignored === "1");

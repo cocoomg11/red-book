@@ -8,8 +8,8 @@
  */
 import { esc, plural, toolkitTitle } from "./const.mjs";
 import { navItem, statusLine, statusLines, badge, dot, icon, TONES } from "../vendor/wanderers-core/index.mjs";
-import { TYPES, durationText, whenText, present } from "./session-model.mjs";
-import { dayKey, dayLabel, rangeText, clockText, elapsedMs } from "./time-model.mjs";
+import { TYPES, durationText, whenText, present, worldTimeText } from "./session-model.mjs";
+import { dayKey, dayLabel, timeLabel, rangeText, clockText, elapsedMs } from "./time-model.mjs";
 import { isFailure, todoId, toLocalInput } from "./board-model.mjs";
 import { groupFindings, tallyText } from "./check-model.mjs";
 import { t } from "./i18n.mjs";
@@ -148,7 +148,7 @@ export function timelineHTML(events = [], o = {}) {
     const ic = TYPES[e.type]?.icon ?? "fa-circle";
     const aside = [e.thread ? badge("accent", t("Session.thread"), { small: true }) : "", e.private ? badge("off", t("Session.gmOnly"), { small: true }) : ""].join("");
     const when = dates ? whenText(e, { ...o, start: o.start }) : e.rtText || "";
-    return `${sep}<li class="${e.type === "note" ? "wc-tl-note" : ""}" data-type="${esc(e.type)}"${e.at ? ` data-at="${esc(e.at)}"` : ""}><span class="wc-tl-time"><span>${esc(when)}</span>${e.wtText ? `<span>${esc(e.wtText)}</span>` : ""}</span>`
+    return `${sep}<li class="${e.type === "note" ? "wc-tl-note" : ""}" data-type="${esc(e.type)}"${e.at ? ` data-at="${esc(e.at)}"` : ""}><span class="wc-tl-time"><span>${esc(when)}</span>${worldTimeText(e) ? `<span>${esc(worldTimeText(e))}</span>` : ""}</span>`
       + `<span class="wc-tl-icon wc-${tone}" aria-hidden="true"><i class="fa-solid ${esc(ic)}"></i></span><span class="wc-tl-text"><span class="wc-sr">${esc(TYPES[e.type]?.label ?? e.type)}:</span>${esc(e.text)}</span>`
       + `<span class="wc-tl-aside">${aside}</span></li>`;
   }).join("")}</ol>`;
@@ -346,7 +346,18 @@ export function prepPanelHTML(items = [], { checkOn = true, max = 100 } = {}) {
     const head = `<p class="wc-row rb-prep-scene"><a class="rb-open wc-grow rb-ellipsis" data-action="openUuid" data-uuid="${esc(sc.sceneUuid)}">${esc(sc.sceneName || sc.sceneUuid)}</a>${checkOn ? iconBtn("checkScene", "fa-solid fa-clipboard-check", t("Board.check"), { scene: sc.sceneId }) : ""}</p>`;
     return `${head}<ul class="wc-lines rb-prep-list">${list.map(i => statusLine(sevTone(i.severity), i.text, { html: `<span class="rb-find-acts">${iconBtn("prepDone", "fa-solid fa-check", t("Prep.done"), { id: i.id })}</span>` })).join("")}</ul>`;
   }).join("") : `<p class="wc-hint rb-pad">${esc(t("Prep.none"))}</p>`;
-  return panel(t("Prep.title"), "fa-solid fa-list-check", `<div class="wc-panel-body">${body}</div>`, { head: badge(items.length ? "warn" : "ok", `${items.length}/${max}`, { small: true }) });
+  // 0.8.0: "3 to do" (Done takes an item off, so there is no done count); the cap shows in the tooltip, and in the badge once the
+  // list is nearly full ("92 to do · max 100").
+  const near = items.length >= Math.ceil(max * 0.8);
+  const label = near ? t("Prep.countMax", { n: items.length, max }) : t("Prep.count", { n: items.length });
+  return panel(t("Prep.title"), "fa-solid fa-list-check", `<div class="wc-panel-body">${body}</div>`, { head: badge(items.length >= max ? "bad" : items.length ? "warn" : "ok", label, { small: true, title: t("Prep.cap", { max }) }) });
+}
+
+/** 0.8.0: the quiet "Start a session?" banner (bottom of the screen, GM's browser): text, Start, and a close button. */
+export function startBannerHTML() {
+  return `<i class="fa-solid fa-book" aria-hidden="true"></i><span class="rb-banner-text">${esc(t("Prompt.quiet"))}</span>`
+    + `<button type="button" class="wc-btn wc-btn-sm wc-btn-primary" data-rb-banner="start"><i class="fa-solid fa-book" aria-hidden="true"></i> ${esc(t("Session.start"))}</button>`
+    + `<button type="button" class="wc-btn wc-btn-icon wc-btn-ghost" data-rb-banner="close" data-tooltip="${esc(t("Prompt.dismiss"))}" aria-label="${esc(t("Prompt.dismiss"))}"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>`;
 }
 
 // ---------------------------------------------------------------- scene check (master–detail)
@@ -362,8 +373,20 @@ export function resultTone(r) {
 }
 
 /**
- * `m`: { scenes: [{ id, name }], results: { [sceneId]: result | { pending: true } } (the GM client's memory of this load), selected,
- * query }. A result is check.mjs checkOne()'s { scene, findings, ignored, stored, tally }.
+ * 0.8.0: when a result was made: "Checked 18:20" today, "Checked Sat 14 Mar 18:20" on another day (viewer's zone; `o.now`,
+ * `o.timeZone`, `o.locale` for tests).
+ * @param {number} at @param {{ now?: number, timeZone?: string, locale?: string }} [o]
+ */
+export function checkedText(at, o = {}) {
+  const now = o.now ?? Date.now();
+  const clock = timeLabel(at, o);
+  return t("Check.checkedAt", { time: dayKey(at, o.timeZone) === dayKey(now, o.timeZone) ? clock : `${dayLabel(at, o)} ${clock}` });
+}
+const checkedTitle = (at, o = {}) => `${dayLabel(at, o)} ${timeLabel(at, o)}`;
+
+/**
+ * `m`: { scenes: [{ id, name }], results: { [sceneId]: result | { pending: true } } (the GM client's memory, 0.8.0: with this
+ * browser's saved results; `at` = when checked), selected, query, now?, timeZone?, locale? }. A result is check.mjs checkOne()'s { scene, findings, ignored, stored, tally }.
  */
 /**
  * `m.prep` (0.5.0, prep list on): { on: true, onBoard: Set of prep-list ids already on the board } adds "Add to board" per finding
@@ -377,22 +400,25 @@ export function checkPageHTML(m) {
     const r = results[s.id]; const tone = resultTone(r);
     const word = r?.pending ? t("Check.checking") : r ? tallyText(r.tally) : t("Check.notChecked");
     const name = String(s.name).toLowerCase();
-    return `<li class="${s.id === m.selected ? "active" : ""}" data-name="${esc(name)}"${q && !name.includes(q) ? " hidden" : ""}><button type="button" class="rb-scene-btn" data-action="pickScene" data-scene="${esc(s.id)}"${s.id === m.selected ? ` aria-current="true"` : ""}>${dot(tone, { label: word })}<span class="wc-grow rb-ellipsis">${esc(s.name)}</span><span class="wc-hint rb-ellipsis">${esc(word)}</span></button></li>`;
+    // 0.8.0: names wrap to two lines (rb-clamp2) and the full name is always the tooltip.
+    return `<li class="${s.id === m.selected ? "active" : ""}" data-name="${esc(name)}"${q && !name.includes(q) ? " hidden" : ""}><button type="button" class="rb-scene-btn" data-action="pickScene" data-scene="${esc(s.id)}" title="${esc(s.name)}"${s.id === m.selected ? ` aria-current="true"` : ""}>${dot(tone, { label: word })}<span class="wc-grow rb-clamp2">${esc(s.name)}</span><span class="wc-hint rb-ellipsis">${esc(word)}</span></button></li>`;
   };
+  const saved = Object.values(results).some(r => r && !r.pending && Number(r.at) > 0);
   const list = `<div class="rb-master"><div class="rb-search"><label class="wc-sr" for="rb-scene-q">${esc(t("Check.search"))}</label><input type="search" id="rb-scene-q" data-filter-scenes placeholder="${esc(t("Check.search"))}" value="${esc(m.query ?? "")}"></div>
     <ul class="wc-panel-list rb-scene-list">${scenes.map(item).join("") || `<li class="wc-hint">${esc(t("Check.noScenes"))}</li>`}</ul>
-    <div class="wc-row rb-pad">${btn("checkAllScenes", "fa-solid fa-list-check", t("Check.all", { n: (m.scenes ?? []).length }), { small: true })}</div></div>`;
+    <div class="wc-row rb-pad">${btn("checkAllScenes", "fa-solid fa-list-check", t("Check.all", { n: (m.scenes ?? []).length }), { small: true })}${saved ? btn("clearSavedChecks", "fa-solid fa-eraser", t("Check.clearSaved"), { small: true }) : ""}</div></div>`;
   const sel = (m.scenes ?? []).find(s => s.id === m.selected);
   const r = sel ? results[sel.id] : null;
   let detail;
   if (!sel) detail = `<div class="wc-alert wc-info">${icon("info")}<div class="wc-alert-title">${esc(t("Check.pick"))}</div><p>${esc(t("Check.readOnly"))}</p></div>`;
   else {
-    const head = `<div class="wc-row rb-detail-head"><h3 class="wc-grow rb-ellipsis">${esc(sel.name)}</h3>${btn("checkScene", "fa-solid fa-clipboard-check", r && !r.pending ? t("Check.again") : t("Check.run"), { small: true, primary: true, data: { scene: sel.id }, disabled: !!r?.pending })}${r && !r.pending ? btn("exportCheck", "fa-solid fa-file-export", t("Check.export"), { small: true, data: { scene: sel.id } }) : ""}</div>`;
+    const when = r && !r.pending && Number(r.at) > 0 ? `<span class="wc-hint rb-checked-at" title="${esc(checkedTitle(r.at, m))}">${esc(checkedText(r.at, m))}</span>` : "";
+    const head = `<div class="wc-row rb-detail-head"><h3 class="wc-grow rb-ellipsis" title="${esc(sel.name)}">${esc(sel.name)}</h3>${when}${btn("checkScene", "fa-solid fa-clipboard-check", r && !r.pending ? t("Check.again") : t("Check.run"), { small: true, primary: true, data: { scene: sel.id }, disabled: !!r?.pending })}${r && !r.pending ? btn("exportCheck", "fa-solid fa-file-export", t("Check.export"), { small: true, data: { scene: sel.id } }) : ""}</div>`;
     if (!r) detail = `${head}${hint(t("Check.readOnly"))}`;
     else if (r.pending) detail = `${head}<p class="wc-status wc-pending">${icon("pending")}<span>${esc(t("Check.checking"))}</span></p>`;
     else detail = `${head}${checkResultHTML(r, m.prep)}`;
   }
-  return `${pageHead(t("Nav.check"), `<span class="wc-hint">${esc(t("Check.memory"))}</span>`)}<div class="rb-md">${list}<div class="rb-detail">${detail}</div></div>`;
+  return `${pageHead(t("Nav.check"), `<span class="wc-hint">${esc(t("Check.saved"))}</span>`)}<div class="rb-md">${list}<div class="rb-detail">${detail}</div></div>`;
 }
 
 /**
