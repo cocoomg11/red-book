@@ -8,6 +8,7 @@
  * 0.6.0 migration reads a time from when an old event has no usable `t`).
  */
 import { esc, plain, plural } from "./const.mjs";
+import { formatCoins, fromCopper, quality, itemSlot, UI_CLASSES } from "../vendor/wanderers-core/index.mjs";
 import { isoOf, msOf, migrateTimes, dayKey, dayLabel, timeLabel, otherDay, rangeText } from "./time-model.mjs";
 
 /** 2 (0.6.0): every event has `at` (ISO, UTC) next to `t`; NPCs met, attendance and awards. */
@@ -206,26 +207,51 @@ export function coinParts(amount, values = {}) {
   const gp = Math.floor(a / gpV); a -= gp * gpV; const sp = Math.floor(a / spV); a -= sp * spV;
   return { gp, sp, cp: Math.round(a / cpV) };
 }
-/** "12 g 5 s 3 c" (zero parts left out; "0 c" for nothing). */
+/** "12 g 5 s 3 c" (zero parts left out; "0 c" for nothing). Only for "Gained" blocks frozen before 0.7.0 (no `ratio`). */
 export const coinText = c => ["gp", "sp", "cp"].filter(k => c[k] > 0).map(k => `${c[k]} ${k[0]}`).join(" ") || "0 c";
+/** A coin amount (smallest coin) as core's short text ("12g 5s 3c") with the world's copper→silver→gold `ratio`. */
+export const coinAmount = (amount, ratio) => formatCoins(Math.abs(Math.round(Number(amount) || 0)), { ratio });
+
+/**
+ * The reward items a quest pays (0.7.0 fix: the picked choice counts too). Toolkit quest record v2 (1.29+): `rewards.items` are
+ * always paid; `rewards.choice` is a list to pick one from, `rewards.pick` the chosen item's uuid ("" = not picked yet). Older
+ * records have only `items`. Each item: { name, qty, img, rarity } (img/rarity "" when unknown). null-safe.
+ * @param {any} q
+ */
+export function rewardItems(q) {
+  const r = q?.rewards && typeof q.rewards === "object" ? q.rewards : {};
+  const list = v => (Array.isArray(v) ? v.filter(i => i && typeof i === "object") : []);
+  const pick = typeof r.pick === "string" && r.pick ? list(r.choice).find(i => i.uuid === r.pick) ?? null : null;
+  return [...list(r.items), ...(pick ? [pick] : [])].map(i => ({ name: str(i.name), qty: i.quantity ?? i.qty ?? 1, img: str(i.img, 500), rarity: str(i.rarity, 40) }));
+}
 /**
  * The "Gained this session" block's data (0.6.0): coin from the coin log within [start, end] (party totals: gained, spent, net) and
  * reward items of quests completed this session. `quests`: [{ name, hidden, paid, items: [{ name, qty }] }] for the quests the
- * session's events say were completed. Hidden quests are left out (the block is player-safe).
- * @param {{ coinLog?: any[], start?: number, end?: number, quests?: any[], values?: Record<string, number>, now?: number }} [o]
+ * session's events say were completed (items: { name, qty, img?, rarity? }, see rewardItems). Hidden quests are left out (the block
+ * is player-safe). `ratio` (0.7.0): copper per silver and silver per gold (core coins; 100 three-coin, 10 standard); with it the
+ * parts come from core's `fromCopper` and the block shows core's coin text. `values` is the pre-0.7.0 way (kept for old callers).
+ * @param {{ coinLog?: any[], start?: number, end?: number, quests?: any[], values?: Record<string, number>, ratio?: number, now?: number }} [o]
  */
-export function gained({ coinLog = [], start = 0, end = 0, quests = [], values = {}, now = Date.now() } = {}) {
+export function gained({ coinLog = [], start = 0, end = 0, quests = [], values = {}, ratio, now = Date.now() } = {}) {
   const a = msOf(start), b = msOf(end) || now;
   let plus = 0, minus = 0;
   for (const e of readCoinLog(coinLog)) if (a && e.at >= a && e.at <= b) { if (e.delta > 0) plus += e.delta; else minus -= e.delta; }
-  /** @type {Map<string, number>} */ const items = new Map();
+  /** @type {Map<string, { qty: number, img: string, rarity: string }>} */ const items = new Map();
   for (const q of Array.isArray(quests) ? quests : []) {
     if (!q || q.hidden) continue;
-    for (const i of Array.isArray(q.items) ? q.items : []) { const n = str(i?.name); if (n) items.set(n, (items.get(n) ?? 0) + Math.max(1, Math.floor(Number(i.qty) || 1))); }
+    for (const i of Array.isArray(q.items) ? q.items : []) {
+      const n = str(i?.name); if (!n) continue;
+      const was = items.get(n);
+      items.set(n, { qty: (was?.qty ?? 0) + Math.max(1, Math.floor(Number(i.qty) || 1)), img: was?.img || str(i.img, 500), rarity: was?.rarity || str(i.rarity, 40) });
+    }
   }
+  const r = Number(ratio) >= 1 ? Math.round(Number(ratio)) : 0;
+  const parts = n => (r ? fromCopper(Math.abs(n), { ratio: r }) : coinParts(n, values));
   return {
-    coin: coinParts(plus, values), spent: coinParts(minus, values), net: plus - minus, netCoin: coinParts(plus - minus, values), netSign: Math.sign(plus - minus),
-    items: [...items].sort((x, y) => x[0].localeCompare(y[0])).map(([name, qty]) => ({ name, qty })), any: !!(plus || minus || items.size)
+    coin: parts(plus), spent: parts(minus), net: plus - minus, netCoin: parts(plus - minus), netSign: Math.sign(plus - minus),
+    ...(r ? { ratio: r, plus, minus } : {}),
+    items: [...items].sort((x, y) => x[0].localeCompare(y[0])).map(([name, v]) => ({ name, qty: v.qty, ...(v.img ? { img: v.img } : {}), ...(v.rarity ? { rarity: v.rarity } : {}) })),
+    any: !!(plus || minus || items.size)
   };
 }
 
@@ -622,6 +648,16 @@ export const EXTRA_LABELS = Object.freeze({
   coin: "Coin", spent: "Spent", items: "Items", xpGm: "Experience awarded (GM only)", seen: "first seen"
 });
 /**
+ * One reward item (0.7.0): core's quality slot when the item has a picture, and its name in the quality colour when it has a rarity.
+ * Every value escaped. @param {{ name: string, img?: string, rarity?: string }} i
+ */
+export function rewardHTML(i) {
+  const q = i.rarity ? quality(i.rarity) : "";
+  const slot = i.img ? `${itemSlot({ img: i.img, rarity: i.rarity || undefined, name: i.name, size: "sm" })} ` : "";
+  return `${slot}${q ? `<span class="wc-q-text" data-quality="${q}">${esc(i.name)}</span>` : esc(i.name)}`;
+}
+
+/**
  * The extra blocks (0.6.0), trusted HTML (every value escaped). `m`: { npcs (normalizeNpcs) | null, attendance | null, awards |
  * null, mode ("xp" | "milestone" | "off"), gained (gained()) | null, timeZone, locale, start }. Player-safe except XP, which goes in a
  * secret block (players see the milestone text only, never XP numbers). A block whose part is null (feature off) is left out.
@@ -638,9 +674,13 @@ export function extrasHTML(m = {}, L = EXTRA_LABELS) {
   const g = m.gained;
   if (g?.any) {
     const lines = [];
-    if (g.net) lines.push(`<li>${esc(L.coin)}: ${g.netSign < 0 ? "−" : "+"}${esc(coinText(g.netCoin))}${g.spent && (g.spent.gp || g.spent.sp || g.spent.cp) ? ` (${esc(L.spent)} ${esc(coinText(g.spent))})` : ""}</li>`);
-    for (const i of g.items) lines.push(`<li>${esc(i.name)}${i.qty > 1 ? ` ×${i.qty}` : ""}</li>`);
-    if (lines.length) out.push(`<h3>${esc(L.gained)}</h3><ul class="rb-gained">${lines.join("")}</ul>`);
+    // 0.7.0: core's coin text when the block carries its ratio; blocks frozen before keep their old text.
+    const net = g.ratio ? coinAmount(g.net, g.ratio) : coinText(g.netCoin);
+    const spent = g.ratio ? (g.minus ? coinAmount(g.minus, g.ratio) : "") : (g.spent && (g.spent.gp || g.spent.sp || g.spent.cp) ? coinText(g.spent) : "");
+    if (g.net) lines.push(`<li>${esc(L.coin)}: ${g.netSign < 0 ? "−" : "+"}${esc(net)}${spent ? ` (${esc(L.spent)} ${esc(spent)})` : ""}</li>`);
+    for (const i of g.items ?? []) lines.push(`<li>${rewardHTML(i)}${i.qty > 1 ? ` ×${i.qty}` : ""}</li>`);
+    // Core's root classes on the list so the quality colours and item slots apply inside the journal page too.
+    if (lines.length) out.push(`<h3>${esc(L.gained)}</h3><ul class="rb-gained ${UI_CLASSES.join(" ")}">${lines.join("")}</ul>`);
   }
   return out.length ? `<section class="rb-extras">${out.join("")}</section>` : "";
 }
@@ -649,8 +689,10 @@ export function extrasHTML(m = {}, L = EXTRA_LABELS) {
  * Coin in the session's own loot lines (inventory diffs, data.coin) as coin-log-shaped entries in copper: the fallback when the
  * toolkit's coin log isn't there (toolkit off, its coin log off, or an older toolkit).
  */
-export function coinFromLoot(events = []) {
-  const V = { pp: 1000, gp: 100, ep: 50, sp: 10, cp: 1 };
+export function coinFromLoot(events = [], ratio = 10) {
+  // 0.7.0: values from the world's ratio (10: dnd5e's standard coins, as before; 100: the toolkit's three coins).
+  const r = Number(ratio) >= 1 ? Math.round(Number(ratio)) : 10;
+  const V = { pp: 10 * r * r, gp: r * r, ep: r * r / 2, sp: r, cp: 1 };
   const out = [];
   for (const e of events) {
     if (e?.type !== "loot" || !e.data?.coin || typeof e.data.coin !== "object") continue;

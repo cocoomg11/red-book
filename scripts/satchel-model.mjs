@@ -11,15 +11,18 @@ export const SATCHEL_READY = `${SATCHEL_ID}.ready`;
  * The object passed to `api.register()`. `fns`: { openPanel(), health({ timeoutMs }) } bound to Red Book; `records`: the hidden
  * record settings (never exported or imported); `debugKey`: the Boolean debug setting.
  * Only fields the Satchel knows are passed (it warns about unknown ones).
- * @param {{ id: string, title: string, openPanel: () => unknown, health: (o?: { timeoutMs?: number }) => unknown, records: readonly string[], debugKey: string }} o
+ * `fixes` (0.7.0): { actionId: () => result } for the health lines' Fix buttons (left out when empty).
+ * @param {{ id: string, title: string, openPanel: () => unknown, health: (o?: { timeoutMs?: number }) => unknown, records: readonly string[], debugKey: string, fixes?: Record<string, () => unknown> }} o
  */
-export function registration({ id, title, openPanel, health, records, debugKey }) {
+export function registration({ id, title, openPanel, health, records, debugKey, fixes }) {
+  const fx = Object.fromEntries(Object.entries(fixes ?? {}).filter(([, f]) => typeof f === "function"));
   return {
     id, title,
     openPanel: () => openPanel(),
     health: (opts = {}) => health(opts),
     debugSetting: { namespace: id, key: debugKey },
-    skipSettings: [...new Set(records)]
+    skipSettings: [...new Set(records)],
+    ...(Object.keys(fx).length ? { fixes: fx } : {})
   };
 }
 

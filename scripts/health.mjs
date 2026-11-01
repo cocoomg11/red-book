@@ -1,13 +1,46 @@
 /**
  * Health check: read-only, GM only. Built with wanderers-core's healthCollector, so every check is wrapped (a failing check becomes
  * one "warn" line, never throws, never changes anything) and the report has core's shared shape:
- *   [{ title, lines: [{ level: "ok" | "warn" | "bad" | "off" | "info", text }] }]
+ *   [{ title, lines: [{ level: "ok" | "warn" | "bad" | "off" | "info", text, fix? }] }]
+ * 0.7.0: a few safe lines carry a `fix` ({ label, action, confirm }, core's contract): the action ids are in FIX_ACTIONS (run by
+ * `runFix`, GM only, after a confirm on Red Book's Health page or in the Wanderer's Satchel, which gets them as `fixes`).
  */
 import { healthCollector } from "../vendor/wanderers-core/index.mjs";
 import { sceneTab } from "../vendor/wanderers-core/foundry/index.mjs";
 import { ID, TOOLKIT_ID, MATT_ID, toolkitTitle, toolkitHealthText } from "./const.mjs";
-import { F, L, get } from "./core.mjs";
+import { F, L, get, set } from "./core.mjs";
+import * as Store from "./store.mjs";
 import { webhookOk } from "./discord-model.mjs";
+
+/** Fix actions (0.7.0): id → { label, confirm }. Each changes one thing and only after the GM confirms. */
+export const FIX_ACTIONS = Object.freeze({
+  storeNone: { label: "Set to None", confirm: "Set the GM-only data journal's ownership back to None for every player?" },
+  clearOpenSession: { label: "Clear it", confirm: "Forget the open session that points at a missing or ended journal? No journal is changed." }
+});
+const fixOf = id => ({ action: id, ...FIX_ACTIONS[id] });
+
+/** Runs one fix (GM only). Resolves to a short text for the notification, or false when nothing was changed. */
+export async function runFix(id) {
+  if (!game.user?.isGM) return false;
+  if (id === "storeNone") {
+    const j = Store.entry(); if (!j) return false;
+    const none = CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE;
+    const own = { default: none };
+    for (const [u, l] of Object.entries(j.ownership ?? {})) if (u !== "default" && Number(l) > none && !game.users.get(u)?.isGM) own[u] = none;
+    await j.update({ ownership: own });
+    return "The GM-only data journal is GM only again.";
+  }
+  if (id === "clearOpenSession") {
+    const was = String(get("openSession") ?? ""); if (!was) return false;
+    const j = game.journal.get(was);
+    if (j && j.flags?.[ID]?.session?.open) return false;   // it is a real open session after all
+    await set("openSession", "");
+    return "The open session was cleared.";
+  }
+  return false;
+}
+/** Fix functions for the Wanderer's Satchel registration (`fixes`). */
+export const satchelFixes = () => Object.fromEntries(Object.keys(FIX_ACTIONS).map(id => [id, () => runFix(id)]));
 
 export function report(deps = {}) {
   const h = healthCollector();
@@ -22,10 +55,12 @@ export function report(deps = {}) {
   if (F.on("sessionLog")) h.check(add => {
     const j = deps.session?.openEntry?.();
     add(j ? "ok" : "info", j ? `Session open: ${j.name}.` : "No session is open.");
+    const id = String(get("openSession") ?? "");
+    if (!j && id) add("warn", game.journal.get(id) ? "The open session setting points at a session log that has ended: nothing is recorded until you clear it or start a new session." : "The open session setting points at a journal that no longer exists: nothing is recorded until you clear it or start a new session.", fixOf("clearOpenSession"));
     const open = game.journal.filter(x => x.flags?.[ID]?.session?.open);
     if (open.length > 1) add("warn", `${open.length} session logs are marked open; only "${j?.name ?? "the one in the setting"}" records. End or delete the others.`);
   });
-  if (F.on("prepBoard")) h.check(add => { const s = deps.board?.store?.(); if (s) add(s.ok ? "ok" : "warn", s.text); });
+  if (F.on("prepBoard")) h.check(add => { const s = deps.board?.store?.(); if (s) add(s.ok ? "ok" : "warn", s.text, s.ok ? undefined : fixOf("storeNone")); });
   if (F.on("sceneCheck")) h.check(add => add("info", game.modules.get(MATT_ID)?.active ? "Monk's Active Tiles is active: its tile actions are checked." : "Monk's Active Tiles isn't active: its check is skipped."));
   if (F.on("whosOnline")) h.check(add => {
     const r = deps.online?.read?.(); if (!r) return;

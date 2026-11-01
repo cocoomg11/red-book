@@ -6,9 +6,11 @@
  * controls, `api.panel(page)` and the board/check buttons.
  */
 import { ID } from "./const.mjs";
+import { RememberedWindow, resetPlacement } from "../vendor/wanderers-core/foundry/index.mjs";
+import { readPlacements } from "../vendor/wanderers-core/index.mjs";
 import { F, get, set } from "./core.mjs";
 import * as S from "./settings-model.mjs";
-import { report } from "./health.mjs";
+import { report, runFix, FIX_ACTIONS } from "./health.mjs";
 import * as V from "./view.mjs";
 import { t } from "./i18n.mjs";
 import { PINS_MAX, TODOS_MAX, isFailure, normalizeNext, fromLocalInput } from "./board-model.mjs";
@@ -25,7 +27,8 @@ function users() {
 }
 const dnd5e = () => game.system?.id === "dnd5e";
 
-export class RedBookApp extends foundry.applications.api.ApplicationV2 {
+/** 0.7.0: core's RememberedWindow reopens the window where the GM left it (hidden client setting `red-book.windowPlacement`). */
+export class RedBookApp extends RememberedWindow(foundry.applications.api.ApplicationV2, { moduleId: ID, key: "app" }) {
   static DEFAULT_OPTIONS = {
     id: `${ID}-panel`, classes: ["rb-app", UI.WINDOW, ...UI.UI_CLASSES], tag: "form", form: { closeOnSubmit: false },
     window: { title: "Red Book", icon: "fa-solid fa-book", resizable: true }, position: { width: 980, height: 720 }
@@ -88,7 +91,7 @@ export class RedBookApp extends foundry.applications.api.ApplicationV2 {
       return V.toolSettingsHTML({ tool: tab.id, tabs: TOOL_TABS(), rows: S.tabRows(tab.id), value: get, off, extra });
     }
     if (p === "health") return V.healthPageHTML(report(deps));
-    if (p === "data") return V.dataPageHTML({ rows: S.tabRows("data"), value: get });
+    if (p === "data") return V.dataPageHTML({ rows: S.tabRows("data"), value: get, showData: get("showModuleData") === true, windows: Object.keys(readPlacements(get(S.PLACEMENT_KEY)).windows).length });
     return "";
   }
 
@@ -198,6 +201,14 @@ export class RedBookApp extends foundry.applications.api.ApplicationV2 {
       case "openOnline": return deps.online?.open();
       case "resetHud": return deps.online?.resetPosition();
       case "cleanup": return deps.cleanup?.open();
+      case "healthFix": {
+        const f = FIX_ACTIONS[d.fix]; if (!f) return undefined;
+        if (!(await UI.confirm(f.label, `<p>${UI.escText(f.confirm)}</p>`))) return undefined;
+        try { const r = await runFix(d.fix); ui.notifications.info(`Red Book: ${r || t("Health.fixNothing")}`); } catch (e) { ui.notifications.error(`Red Book: ${UI.escText(String(e?.message ?? e))}`); }
+        return this.render();
+      }
+      // 0.7.0: forget every remembered window placement (this browser); open windows move on their next opening.
+      case "resetWindows": await resetPlacement(ID); ui.notifications.info(`Red Book: ${t("Data.windowsDone")}`); return this.render();
       default: return undefined;
     }
   }
@@ -246,6 +257,7 @@ export class RedBookApp extends foundry.applications.api.ApplicationV2 {
       return ui.notifications.info("Red Book: features saved.");
     }
     const tab = this.page === "data" ? "data" : this.page === "tools" ? this.tool : null; if (!tab) return undefined;
+    if (tab === "data") { const v = !!form.elements.showModuleData?.checked; if (v !== (get("showModuleData") === true)) await set("showModuleData", v); }
     const { basic, advanced } = S.tabRows(tab);
     for (const s of [...basic, ...advanced]) {
       const el = form.elements[s.key]; if (!el || el.disabled) continue;

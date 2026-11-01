@@ -5,9 +5,10 @@
 import { ID, esc } from "./const.mjs";
 import * as M from "./cleanup-model.mjs";
 import * as UI from "./ui.mjs";
+import * as Store from "./store.mjs";
 import { gateApi } from "./check-model.mjs";
 import { confirmed, changedSettings } from "../vendor/wanderers-core/index.mjs";
-import { flaggedDocuments, unsetFlags, resetSettings, settingValues } from "../vendor/wanderers-core/foundry/index.mjs";
+import { flaggedDocuments, unsetFlags, resetSettings, settingValues, RememberedWindow } from "../vendor/wanderers-core/foundry/index.mjs";
 
 /** The plan (GM only: players get the empty plan). */
 export function plan() {
@@ -28,16 +29,18 @@ export async function remove(pick = {}) {
   const contents = Object.fromEntries(p.folders.map(f => [f.id, game.folders.get(f.id)?.contents?.map(j => j.id) ?? []]));
   const children = Object.fromEntries(p.folders.map(f => [f.id, game.folders.get(f.id)?.children ?? []]));
   const folders = pick.folders ? M.emptyFolders(p, pick, contents, children) : [];
-  for (const k of ["sessions", "recaps", "reports", "store"]) if (pick[k] && p[k].length) {
+  for (const k of ["sessions", "recaps", "reports"]) if (pick[k] && p[k].length) {
     try { await JournalEntry.deleteDocuments(p[k].map(j => j.id)); done[k] = p[k].length; } catch (e) { console.warn(`${ID} | remove ${k}`, e); done[k] = 0; }
   }
+  // 0.7.0: the GM-only store through core (every copy, with its dataFolderFiled mark, and the shared "Module data" folder once empty).
+  if (pick.store && p.store.length) done.store = await Store.remove();
   if (pick.flags) done.flags = await unsetFlags(ID, p.flags.map(f => f.uuid));
   if (folders.length) { try { await Folder.deleteDocuments(folders.map(f => f.id)); done.folders = folders.length; } catch (e) { console.warn(`${ID} | remove folders`, e); } }
   if (pick.settings) done.settings = await resetSettings(ID, p.settings.map(s => s.key));
   return done;
 }
 
-export class CleanupApp extends foundry.applications.api.ApplicationV2 {
+export class CleanupApp extends RememberedWindow(foundry.applications.api.ApplicationV2, { moduleId: ID, key: "cleanup", size: false }) {
   static DEFAULT_OPTIONS = { id: `${ID}-cleanup`, classes: ["rb-cleanup", UI.WINDOW], tag: "form", form: { closeOnSubmit: false }, window: { title: "Red Book · Remove Red Book data", icon: "fa-solid fa-broom", resizable: true }, position: { width: 580, height: "auto" } };
   async _renderHTML() {
     const div = document.createElement("div");

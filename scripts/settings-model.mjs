@@ -68,11 +68,17 @@ export const SETTINGS = defineSettings([
   // 0.5.0: the next session's date, set on the board (not GM-only: the players may see it).
   { key: "nextSession", type: "object", default: { v: 1, at: 0 }, hidden: true },
   // 0.6.0: the "Previously on…" recap this browser has seen ({ v: 1, key }: recap id and its last change), per browser.
-  { key: "previouslySeen", type: "object", default: { v: 1, key: "" }, hidden: true, client: true }
+  { key: "previouslySeen", type: "object", default: { v: 1, key: "" }, hidden: true, client: true },
+  // 0.7.0: show the shared "Module data" journal folder (core hides it; the switch is on the Data page), per browser. Any of the
+  // modules' switches shows the folder for all of them. Re-renders the Journal sidebar when it changes.
+  { key: "showModuleData", type: "bool", default: false, hidden: true, client: true, onChange: () => { try { /** @type {any} */ (globalThis).ui?.journal?.render?.(); } catch { } } }
 ], { reserved: FEATURE_KEYS });
 
+/** core's remembered window placement (0.7.0): one hidden client setting registered by core (`registerWindowPlacement`), not a row. */
+export const PLACEMENT_KEY = "windowPlacement";
+
 /** Hidden record settings: never shown and never reset by "Reset tab". */
-export const RECORDS = records(SETTINGS);
+export const RECORDS = Object.freeze([...records(SETTINGS), PLACEMENT_KEY]);
 
 /** Settings of a tab, split into { basic, advanced } (rows of a turned-off tool are shown greyed out, so all are listed). */
 export const tabRows = tab => coreTabRows(SETTINGS, tab);

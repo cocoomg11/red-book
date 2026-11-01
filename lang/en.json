@@ -167,12 +167,20 @@
     "Health": {
       "ok": "All good",
       "issues": "{n} to look at",
-      "refresh": "Check again"
+      "refresh": "Check again",
+      "fix": "Fix",
+      "fixNothing": "nothing needed changing."
     },
     "Data": {
       "removeTitle": "Remove Red Book data",
       "removeHint": "A dry run comes first; nothing changes until you tick, type REMOVE and confirm.",
-      "remove": "Remove Red Book data…"
+      "remove": "Remove Red Book data…",
+      "showData": "Show module data",
+      "showDataHint": "The GM-only data journals of Red Book and your other modules sit in a \"Module data\" journal folder that is hidden from the Journal sidebar. Tick to show it in this browser. This is tidiness, not secrecy: players' browsers still receive those journals.",
+      "windows": "Window positions",
+      "windowsReset": "Reset window positions",
+      "windowsHint": "Red Book's windows open where you last left them in this browser ({n} remembered). Reset puts them back at their default spot the next time they open.",
+      "windowsDone": "window positions reset."
     },
     "Start": {
       "title": "Session Start",

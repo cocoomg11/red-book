@@ -12,6 +12,8 @@ import { normalizePins, normalizeTodos } from "./board-model.mjs";
 export const STORE_VERSION = 1;
 /** Name of the store journal (GM only; found by its flag, not its name). */
 export const STORE_NAME = "Red Book data (GM only)";
+/** Text of the store journal's "About" page (core escapes it). */
+export const STORE_ABOUT = "Red Book keeps GM-only data (the next-session board's pins and the prep list) on this entry. Leave it GM only. Remove Red Book data deletes it.";
 
 export const normalizeStore = versioned({
   version: STORE_VERSION,
@@ -25,6 +27,12 @@ export const normalizeStore = versioned({
     migrated: Object.fromEntries(Object.entries(s?.migrated && typeof s.migrated === "object" ? s.migrated : {}).filter(([, t]) => Number.isFinite(Number(t))).map(([k, t]) => [k, Number(t)]))
   })
 });
+
+/**
+ * The options for core's `createStore` (0.7.0; store.mjs adds `log` and `isWriter`). No marker flag (`entryFlag: null`): the entry is
+ * found by its data flag `flags.red-book.store`, exactly as before 0.7.0, so an existing store is kept as it is.
+ */
+export const STORE_OPTIONS = Object.freeze({ name: STORE_NAME, flagKey: "store", entryFlag: null, normalize: normalizeStore, about: STORE_ABOUT });
 
 /**
  * The one-time move of the `boardPins` world setting into the store. Returns { store, clearSetting, moved }: `store` the store to

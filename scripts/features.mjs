@@ -27,3 +27,12 @@ export const FEATURE_LIST = [
 
 export const FEATURES = defineFeatures(FEATURE_LIST);
 export const FEATURE_KEYS = FEATURES.map(f => f.key);
+
+/**
+ * Key bindings (0.7.0: registered through core's `registerOpenKeybinding`; checked by core's `defineOpenKeybinding` in the tests).
+ * Action ids and default keys never change, so the keys users picked in Configure Controls stay. Both GM only.
+ */
+export const KEYS = Object.freeze({
+  quickNote: Object.freeze({ action: "quickNote", name: "Quick note", hint: "Opens a small box to add a note to the open session (GM). Start the note with ? to make it an open thread.", gmOnly: true, editable: [{ key: "KeyN", modifiers: ["Control", "Shift"] }] }),
+  openRedBook: Object.freeze({ action: "openRedBook", name: "Open Red Book", hint: "Opens the Red Book window (GM).", gmOnly: true, editable: [] })
+});

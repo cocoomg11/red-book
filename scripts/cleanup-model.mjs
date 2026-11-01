@@ -8,18 +8,24 @@ import { dryRun as coreDryRun, hasFlags } from "../vendor/wanderers-core/index.m
 /** @type {[string, string, boolean][]} */
 export const CATEGORIES = [
   ["sessions", "Session log journals (the GM-only timelines and their notes pages)", false],
-  ["store", "The GM-only data journal (the next-session board's pins)", false],
+  ["store", "The GM-only data journal (the next-session board's pins and prep list; the shared \"Module data\" folder goes too once nothing else is in it)", false],
   ["recaps", "Player recap journals made by Share as recap", false],
   ["reports", "Scene check report journals", true],
   ["flags", "Red Book flags on other documents, including ignored scene-check findings (the documents stay; only our flags go)", true],
   ["folders", "Folders Red Book made, once empty", true],
-  ["settings", "Reset Red Book's settings to defaults (feature toggles; this browser's Who's online panel spot and fold; reloads)", false]
+  ["settings", "Reset Red Book's settings to defaults (feature toggles; this browser's Who's online panel spot and fold, window positions and Show module data; reloads)", false]
 ];
-/** Setting scopes "Reset Red Book's settings" covers: the world's, and this browser's client settings (onlineHudPos, onlineHudCollapsed). */
+/**
+ * Setting scopes "Reset Red Book's settings" covers: the world's, and this browser's client settings (onlineHudPos,
+ * onlineHudCollapsed, 0.7.0: showModuleData and core's windowPlacement).
+ */
 export const SETTING_SCOPES = ["world", "client"];
 
 const flagsOf = d => d?.flags?.["red-book"];
-/** What a journal entry is to us: "session", "recap", "report", "store" or null. */
+/**
+ * What a journal entry is to us: "session", "recap", "report", "store" or null. The store entry also carries core's
+ * `dataFolderFiled` mark (0.7.0) and goes as a whole; a journal with only that mark left is listed under "flags".
+ */
 export function kindOf(entry) {
   const f = flagsOf(entry); if (!f || typeof f !== "object") return null;
   if (f.session) return "session";

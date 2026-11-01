@@ -7,6 +7,9 @@
  */
 import { ID, HOOKS, TOOLKIT_ID, esc } from "./const.mjs";
 import * as M from "./session-model.mjs";
+import { COIN_RATIO } from "../vendor/wanderers-core/index.mjs";
+import { registerOpenKeybinding } from "../vendor/wanderers-core/foundry/index.mjs";
+import { KEYS } from "./features.mjs";
 import { rangeText } from "./time-model.mjs";
 import { F, L, get, set, log, warn } from "./core.mjs";
 import { offGroups } from "./settings-model.mjs";
@@ -239,10 +242,19 @@ function takeAttendance() {
 function coinLog() {
   try { const api = game.modules.get(TK)?.active ? game.modules.get(TK)?.api : null; const e = api?.coinLog?.entries?.(); return Array.isArray(e) ? e : null; } catch { return null; }
 }
-/** The toolkit's coin values ({ gp, sp, cp } in its smallest coin), defaults when it doesn't say. */
-function coinValues() {
-  try { const c = game.modules.get(TK)?.api?.coins?.(); if (Array.isArray(c)) return Object.fromEntries(c); } catch { }
-  return {};
+/**
+ * Copper per silver and silver per gold (0.7.0, core coins): the toolkit's `api.coinRatio()` when it has one, else from its
+ * `api.coins()` values, else 100 (core's default, the toolkit's three coins) while the toolkit is active, and 10 (dnd5e's standard
+ * coins, which the loot-line fallback reads) without it.
+ */
+function coinRatio() {
+  const tk = game.modules.get(TK);
+  try {
+    const api = tk?.active ? tk.api : null;
+    const r = Number(api?.coinRatio?.()); if (Number.isFinite(r) && r >= 1) return Math.round(r);
+    const c = api?.coins?.(); if (Array.isArray(c)) { const v = Object.fromEntries(c); if (v.sp > 0 && v.cp > 0) return Math.round(v.sp / v.cp); }
+  } catch { }
+  return tk?.active ? COIN_RATIO : 10;
 }
 /** Reward items of quests completed this session (not hidden), read from the toolkit's quest data. */
 function questRewards(data) {
@@ -250,14 +262,15 @@ function questRewards(data) {
   for (const e of data.events) {
     if (e.type !== "quest" || e.private || e.data?.status !== "completed" || !e.data?.quest) continue;
     const q = questData(game.journal.get(e.data.quest)); if (!q || q.hidden) continue;
-    out.push({ name: e.text, hidden: !!q.hidden, items: (Array.isArray(q.rewards?.items) ? q.rewards.items : []).map(i => ({ name: i?.name, qty: i?.quantity ?? 1 })) });
+    out.push({ name: e.text, hidden: !!q.hidden, items: M.rewardItems(q) });
   }
   return out;
 }
 /** The "Gained this session" data for a session (coin log in its window, or its own loot lines without one). */
 function gainedNow(data) {
   const log = coinLog();
-  return M.gained({ coinLog: log ?? M.coinFromLoot(data.events), start: data.startedAt, end: data.open ? 0 : data.endedAt, quests: questRewards(data), values: log ? coinValues() : {} });
+  const ratio = coinRatio();
+  return M.gained({ coinLog: log ?? M.coinFromLoot(data.events, ratio), start: data.startedAt, end: data.open ? 0 : data.endedAt, quests: questRewards(data), ratio });
 }
 /** Labels for the extra blocks, from lang/en.json. */
 const extraLabels = () => Object.fromEntries(Object.keys(M.EXTRA_LABELS).map(k => [k, t(`Extras.${k}`)]));
@@ -518,11 +531,8 @@ function wrapShow() {
 
 // ---------------------------------------------------------------- setup
 export function registerKeybinding() {
-  game.keybindings.register(ID, "quickNote", {
-    name: "Quick note", hint: "Opens a small box to add a note to the open session (GM). Start the note with ? to make it an open thread.",
-    editable: [{ key: "KeyN", modifiers: ["Control", "Shift"] }], restricted: true, precedence: CONST.KEYBINDING_PRECEDENCE.NORMAL,
-    onDown: () => { if (get("notePrompt") !== false) noteDialog(); return true; }
-  });
+  // 0.7.0: through core's registerOpenKeybinding (same action id and default key as before, so users' own bindings stay).
+  registerOpenKeybinding({ moduleId: ID, ...KEYS.quickNote, precedence: CONST.KEYBINDING_PRECEDENCE.NORMAL, onDown: () => { if (get("notePrompt") !== false) noteDialog(); } });
 }
 
 /** Ready hook (feature on). */

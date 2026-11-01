@@ -110,7 +110,7 @@ test("extras block: milestone for players, XP only in a secret block, attendance
   assert.ok(!xp.includes("Level")); assert.ok(!xp.includes("Bo"), "taken-out rows aren't listed");
   assert.match(xp, /At the table<\/h3><ul class="rb-attendance"><li>Thorn \(Ana\)<\/li>/);
   assert.match(xp, /NPCs met<\/h3>.*Wolf · Road/);
-  assert.match(xp, /Gained this session<\/h3><ul class="rb-gained"><li>Coin: \+12 g 5 s 3 c<\/li><li>Ring<\/li>/);
+  assert.match(xp, /Gained this session<\/h3><ul class="rb-gained[^"]*"><li>Coin: \+12 g 5 s 3 c<\/li><li>Ring<\/li>/);
   const ms = M.extrasHTML({ ...s, mode: "milestone" });
   assert.match(ms, /Level &lt;4&gt;/); assert.ok(!ms.includes("XP"));
   // The recap keeps the milestone and drops the XP.

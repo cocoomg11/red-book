@@ -522,19 +522,29 @@ export const discordExtraHTML = () => `<div class="wc-alert wc-warn">${icon("war
   + `<div class="wc-row">${btn("discordTest", "fa-brands fa-discord", t("Discord.test"), { small: true })}</div>${hint(t("Discord.testHint"))}`;
 
 /** Health: core's report sections ([{ title, lines }]). */
+/** Health lines; a line with a fix action (0.7.0) gets a Fix button (`healthFix`, the GM confirms first). */
+export function healthLinesHTML(lines = []) {
+  if (!lines.some(l => l?.fix?.action)) return statusLines(lines);
+  return `<ul class="wc-lines">${lines.map(l => statusLine(String(l?.level ?? "info"), l?.text, l?.fix?.action ? { html: btn("healthFix", "fa-solid fa-wrench", l.fix.label || t("Health.fix"), { small: true, data: { fix: l.fix.action } }) } : {})).join("")}</ul>`;
+}
 export function healthPageHTML(report = []) {
   const all = report.flatMap(s => s.lines ?? []);
   const worst = all.some(l => l.level === "bad") ? "bad" : all.some(l => l.level === "warn") ? "warn" : "ok";
   return `${pageHead(t("Nav.health"), badge(worst, worst === "ok" ? t("Health.ok") : t("Health.issues", { n: all.filter(l => l.level === "bad" || l.level === "warn").length }), { small: true }))}
-    ${report.map(s => panel(s.title || t("Nav.health"), "", `<div class="wc-panel-body">${statusLines(s.lines)}</div>`)).join("")}
+    ${report.map(s => panel(s.title || t("Nav.health"), "", `<div class="wc-panel-body">${healthLinesHTML(s.lines)}</div>`)).join("")}
     <div class="wc-row">${btn("refresh", "fa-solid fa-rotate", t("Health.refresh"), { small: true })}</div>`;
 }
 
-/** Data: debug logging (and any other data-tab rows) and Remove Red Book data. */
-/** @param {{ rows?: { basic: any[], advanced: any[] }, value?: (key: string) => any }} [opts] */
-export function dataPageHTML({ rows = { basic: [], advanced: [] }, value = () => undefined } = {}) {
+/**
+ * Data: debug logging (and any other data-tab rows), 0.7.0's "Show module data" switch (this browser) and Reset window positions,
+ * and Remove Red Book data. `showData`: the switch's value; `windows`: how many window placements this browser remembers.
+ * @param {{ rows?: { basic: any[], advanced: any[] }, value?: (key: string) => any, showData?: boolean, windows?: number }} [opts]
+ */
+export function dataPageHTML({ rows = { basic: [], advanced: [] }, value = () => undefined, showData = false, windows = 0 } = {}) {
   const all = [...rows.basic, ...rows.advanced];
-  return `${pageHead(t("Nav.data"))}<div class="wc-panel"><div class="wc-panel-body">${all.map(s => settingRowHTML(s, value(s.key))).join("")}</div></div>${all.length ? saveBar() : ""}
+  const show = `<div class="form-group"><label for="rb-set-showModuleData">${esc(t("Data.showData"))}</label><div class="form-fields"><input type="checkbox" id="rb-set-showModuleData" name="showModuleData"${showData ? " checked" : ""}></div><p class="hint">${esc(t("Data.showDataHint"))}</p></div>`;
+  const win = `<div class="form-group"><label>${esc(t("Data.windows"))}</label><div class="form-fields">${btn("resetWindows", "fa-solid fa-window-restore", t("Data.windowsReset"), { small: true, disabled: !windows })}</div><p class="hint">${esc(t("Data.windowsHint", { n: windows }))}</p></div>`;
+  return `${pageHead(t("Nav.data"))}<div class="wc-panel"><div class="wc-panel-body">${all.map(s => settingRowHTML(s, value(s.key))).join("")}${show}${win}</div></div>${saveBar()}
     <div class="wc-alert wc-warn">${icon("warn")}<div class="wc-alert-title">${esc(t("Data.removeTitle"))}</div><p>${esc(t("Data.removeHint"))}</p></div>
     <div class="wc-row">${btn("cleanup", "fa-solid fa-broom", t("Data.remove"), { danger: true })}</div>`;
 }

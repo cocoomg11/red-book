@@ -17,7 +17,7 @@
 import * as M from "./online-model.mjs";
 import { ID, TOOLKIT_ID } from "./const.mjs";
 import { get, set, warn } from "./core.mjs";
-import { sceneTab } from "../vendor/wanderers-core/foundry/index.mjs";
+import { sceneTab, RememberedWindow } from "../vendor/wanderers-core/foundry/index.mjs";
 import { UI_CLASSES } from "../vendor/wanderers-core/index.mjs";
 import * as V from "./view.mjs";
 import { t } from "./i18n.mjs";
@@ -126,7 +126,7 @@ export function refresh() {
   return r;
 }
 
-export class OnlineApp extends foundry.applications.api.ApplicationV2 {
+export class OnlineApp extends RememberedWindow(foundry.applications.api.ApplicationV2, { moduleId: ID, key: "online", size: false }) {
   static DEFAULT_OPTIONS = { id: `${ID}-online`, classes: ["rb-window", "rb-online-window", ...UI_CLASSES], window: { title: "Who's online", icon: "fa-solid fa-users", resizable: true }, position: { width: 300, height: "auto" } };
   get title() { return t("Online.title"); }
   async _renderHTML() { const div = document.createElement("div"); div.innerHTML = V.onlinePageHTML(read(), { page: false }); return div; }

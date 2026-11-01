@@ -15,12 +15,15 @@ import * as Panel from "./panel.mjs";
 import * as Start from "./start.mjs";
 import * as Online from "./online.mjs";
 import * as Migrate from "./migrate.mjs";
+import * as Store from "./store.mjs";
 import * as Discord from "./discord.mjs";
 import * as Previously from "./previously.mjs";
 import * as Timer from "./timer.mjs";
-import { report } from "./health.mjs";
+import { report, satchelFixes } from "./health.mjs";
 import { registration, registerWith, SATCHEL_ID } from "./satchel-model.mjs";
 import { RECORDS } from "./settings-model.mjs";
+import { KEYS } from "./features.mjs";
+import { registerOpenKeybinding, hideDataFolder, registerWindowPlacement } from "../vendor/wanderers-core/foundry/index.mjs";
 
 const deps = { session: Session, board: Board, check: Check, cleanup: Cleanup, online: Online, start: Start, discord: Discord, previously: Previously };
 
@@ -33,16 +36,16 @@ const PreviouslyApi = gateApi(Previously.api, () => !!game.user?.isGM, () => ui.
 Hooks.once("init", () => {
   F.register();
   S.register();
+  registerWindowPlacement(ID);   // 0.7.0: core's hidden client setting red-book.windowPlacement (remembered window spots)
   game.settings.registerMenu(ID, "panel", { name: "Red Book", label: "Open the control panel", hint: "Health, start/end session, the board, scene checks, every tool's settings and Remove Red Book data.", icon: "fa-solid fa-book", type: Panel.ControlPanel, restricted: true });
   game.settings.registerMenu(ID, "cleanup", { name: "Remove Red Book data", label: "Remove Red Book data", hint: "Dry run first, then removes what Red Book stored in this world.", icon: "fa-solid fa-broom", type: Cleanup.CleanupApp, restricted: true });
   Panel.init(deps); Board.init(deps); Start.init(deps); Previously.init(deps); Timer.init(deps);
   if (F.on("sessionLog")) Session.registerKeybinding();
   if (F.on("whosOnline")) Online.init();
+  // 0.7.0: core hides the shared "Module data" journal folder (the GM-only store lives there) unless a "Show module data" switch is on.
+  hideDataFolder(ID, { shown: () => get("showModuleData") === true });
   // 0.5.0: Open Red Book (GM). No default key: the GM picks one in Configure Controls.
-  if (F.on("openKey")) game.keybindings.register(ID, "openRedBook", {
-    name: "Open Red Book", hint: "Opens the Red Book window (GM).", editable: [], restricted: true,
-    precedence: CONST.KEYBINDING_PRECEDENCE.NORMAL, onDown: () => { Panel.open(); return true; }
-  });
+  if (F.on("openKey")) registerOpenKeybinding({ moduleId: ID, ...KEYS.openRedBook, precedence: CONST.KEYBINDING_PRECEDENCE.NORMAL, onDown: () => { Panel.open(); } });
 
   Hooks.on("getSceneControlButtons", controls => {
     if (!game.user.isGM) return;
@@ -72,7 +75,8 @@ Hooks.once("ready", () => {
   if (F.on("whosOnline")) Migrate.clientPosition().finally(() => Online.ready());
   // One-time GM work on the leader, after the GM tabs have found each other: carry over the toolkit's settings and Hub flags, and
   // move the board pins out of the world setting into the GM-only store.
-  L.onLeader(() => { Migrate.run({ online: F.on("whosOnline"), start: F.on("sessionStart"), pins: F.on("prepBoard") }); });
+  // 0.7.0: then file a root-level GM-only store journal into "Module data" once (core; never throws).
+  L.onLeader(() => { Migrate.run({ online: F.on("whosOnline"), start: F.on("sessionStart"), pins: F.on("prepBoard") }).finally(() => Store.file()); });
   const gm = () => !!game.user?.isGM;
   const deny = () => ui.notifications.warn("Red Book: GM only.");
   game.modules.get(ID).api = {
@@ -98,7 +102,7 @@ Hooks.once("ready", () => {
   };
   // Wanderer's Satchel (optional GM hub): register when it's active. Its calls run on a GM's client only.
   registerWith(registration({
-    id: ID, title: "Red Book", openPanel: () => Panel.open(), health: () => report(deps), records: RECORDS, debugKey: "debugLog"
+    id: ID, title: "Red Book", openPanel: () => Panel.open(), health: () => report(deps), records: RECORDS, debugKey: "debugLog", fixes: satchelFixes()
   }), {
     active: () => !!game.modules.get(SATCHEL_ID)?.active, api: () => game.modules.get(SATCHEL_ID)?.api,
     once: (h, fn) => Hooks.once(h, fn), warn: (m, e) => warn(m, e)

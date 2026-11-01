@@ -6,6 +6,7 @@
  * No recap is posted. Red Book never writes the toolkit's Travel Log page; the session log is where the start is recorded.
  */
 import { ID } from "./const.mjs";
+import { RememberedWindow } from "../vendor/wanderers-core/foundry/index.mjs";
 import { F, get } from "./core.mjs";
 import { sceneChoices } from "./start-model.mjs";
 import { startHTML } from "./view.mjs";
@@ -16,7 +17,7 @@ import * as UI from "./ui.mjs";
 let deps = {};
 export function init(d) { deps = d; }
 
-export class StartApp extends foundry.applications.api.ApplicationV2 {
+export class StartApp extends RememberedWindow(foundry.applications.api.ApplicationV2, { moduleId: ID, key: "start" }) {
   static DEFAULT_OPTIONS = {
     id: `${ID}-start`, classes: ["rb-start-app", UI.WINDOW, ...UI.UI_CLASSES], tag: "form", form: { closeOnSubmit: false },
     window: { title: "Session Start", icon: "fa-solid fa-flag-checkered", resizable: true }, position: { width: 420, height: 560 }

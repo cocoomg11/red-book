@@ -46,7 +46,8 @@ export const md = s => String(s ?? "").replace(/([\\*_~`|>#[\]()-])/g, "\\$1");
  * @param {string} html
  */
 export function htmlToText(html = "") {
-  let s = stripSecrets(String(html ?? "")).replace(/<!--[\s\S]*?-->/g, "");
+  // 0.7.0: screen-reader-only text (core item slots: the quality word) is left out of the plain text.
+  let s = stripSecrets(String(html ?? "")).replace(/<!--[\s\S]*?-->/g, "").replace(/<span class="wc-sr">[^<]*<\/span>/g, "");
   s = s.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/@UUID\[[^\]]*\]/g, "");
   /** @type {string[]} */ const out = [];
   const re = /<(h[1-6]|li|p)\b[^>]*>([\s\S]*?)<\/\1>/gi;
