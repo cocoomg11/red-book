@@ -394,9 +394,16 @@ export function ready() {
   setInterval(() => { if (recording()) flushInventory(); }, 5000);
 }
 
-async function promptStart() {
-  const ok = await UI.confirm("Start a session?", "<p>No session is open. Start one now? While it's open, Red Book keeps a timeline of what happens.</p>");
-  if (ok) L.request("start");
+const PROMPT_ID = `${ID}-start-prompt`;
+/** The load prompt. Closed (and a late Yes ignored) when a session starts another way: panel, token button, API or another tab. */
+function promptStart() {
+  return M.startPrompt({
+    ask: () => UI.confirm("Start a session?", "<p>No session is open. Start one now? While it's open, Red Book keeps a timeline of what happens.</p>", { id: PROMPT_ID }),
+    subscribe: fn => { const hid = Hooks.on(HOOKS.sessionStarted, fn); return () => Hooks.off(HOOKS.sessionStarted, hid); },
+    close: () => foundry.applications.instances?.get?.(PROMPT_ID)?.close?.(),
+    isOpen: () => !!openEntry(),
+    start: () => L.request("start")
+  });
 }
 
 /** Scene control buttons (token layer): Start/End session and Quick note. */

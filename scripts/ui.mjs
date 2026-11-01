@@ -6,8 +6,9 @@ export const TextEditorImpl = () => foundry.applications.ux?.TextEditor?.impleme
 /** Every Red Book window carries this class: no backdrop blur (styles/red-book.css), shared colours. */
 export const WINDOW = "rb-window";
 
-export function confirm(title, content) {
-  return DialogV2().confirm({ classes: [WINDOW], window: { title }, content, rejectClose: false });
+/** A yes/no dialog; resolves true, false or null (closed). `options` go to DialogV2 (e.g. an `id` to find and close it later). */
+export function confirm(title, content, options = {}) {
+  return DialogV2().confirm({ classes: [WINDOW], window: { title }, content, rejectClose: false, ...options });
 }
 /** A one-form dialog; resolves to the form's values or null. */
 export function form(title, content, label = "OK", width = 460) {

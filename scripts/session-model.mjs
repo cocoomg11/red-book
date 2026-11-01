@@ -359,3 +359,19 @@ export function openThreads(session) {
   if (!session.open && session.summary?.threads) return session.summary.threads;
   return session.events.filter(e => e.type === "note" && e.thread).map(e => ({ id: e.id, text: e.text, private: e.private }));
 }
+
+/**
+ * The "Start a session?" prompt, with its Foundry parts injected (tested in Node). `ask()` opens the dialog and resolves true/false/null;
+ * `subscribe(fn)` calls fn when a session starts some other way and returns an unsubscribe function; `close()` closes the dialog;
+ * `isOpen()` says whether a session is open now; `start()` starts one. A session started while the prompt is up closes it, and a Yes
+ * clicked after that (or with a session already open) does nothing. Resolves to whether `start()` was called.
+ */
+export async function startPrompt({ ask, subscribe, close = () => { }, isOpen = () => false, start }) {
+  let started = false;
+  const off = subscribe?.(() => { started = true; try { close(); } catch { } }) ?? (() => { });
+  try {
+    const ok = await ask();
+    if (!ok || started || isOpen()) return false;
+    start(); return true;
+  } finally { try { off(); } catch { } }
+}

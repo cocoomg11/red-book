@@ -102,3 +102,22 @@ test("summary and timeline rendering", () => {
 test("event types turned off are skipped (notes never)", () => {
   assert.equal(M.typeOn("combatStart", ["combat"]), false); assert.equal(M.typeOn("note", ["note"]), true); assert.equal(M.typeOn("quest", []), true);
 });
+
+test("start prompt: closes and does nothing when a session starts another way", async () => {
+  let fire = null, closed = 0, started = 0, unsub = 0, answer;
+  const ask = () => new Promise(r => { answer = r; });
+  const deps = { ask, subscribe: fn => { fire = fn; return () => { unsub++; fire = null; }; }, close: () => { closed++; answer(null); }, isOpen: () => false, start: () => started++ };
+  // Started elsewhere while the prompt is up: closed, no second start.
+  let p = M.startPrompt(deps); fire();
+  assert.equal(await p, false); assert.equal(closed, 1); assert.equal(started, 0); assert.equal(unsub, 1);
+  // A late Yes after a start elsewhere is ignored too.
+  p = M.startPrompt({ ...deps, close: () => closed++ }); fire(); answer(true);
+  assert.equal(await p, false); assert.equal(started, 0);
+  // Yes with a session already open (missed hook): nothing.
+  p = M.startPrompt({ ...deps, isOpen: () => true }); answer(true);
+  assert.equal(await p, false); assert.equal(started, 0);
+  // Plain Yes starts once; No doesn't; the hook is always released.
+  p = M.startPrompt(deps); answer(true); assert.equal(await p, true); assert.equal(started, 1);
+  p = M.startPrompt(deps); answer(false); assert.equal(await p, false); assert.equal(started, 1);
+  assert.equal(unsub, 5); assert.equal(fire, null);
+});
