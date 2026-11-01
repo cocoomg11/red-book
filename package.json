@@ -10,5 +10,9 @@
     "lint": "eslint .",
     "types": "tsc -p tsconfig.json",
     "verify-core": "node vendor/wanderers-core/vendor.mjs verify"
+  },
+  "devDependencies": {
+    "eslint": "10.13.0",
+    "typescript": "7.0.2"
   }
 }
