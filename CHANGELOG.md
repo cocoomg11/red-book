@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.7.0 (2026-11-01)
+
+Red Book moves from wanderers-core 0.3.1 straight to **0.5.0** and uses its new helpers, plus one fix found in live testing.
+
+### Fixed
+- **Gained this session left out the reward the players picked.** Quests with a choice of rewards (Wanderer's Toolkit 1.29+, quest record v2: `rewards.choice` and `rewards.pick`) now count the picked item next to the fixed ones; with no pick, or a pick that is no longer one of the choices, only the fixed items count.
+
+### Changed
+- **wanderers-core 0.5.0** vendored (CI checks `@v0.5.0`; the release zip leaves out core's dev-only `testing/` folder). Windows move to core's stylesheet revision 3 by themselves (no revision is written in Red Book).
+- **GM-only store on core's `createStore`.** The *Red Book data (GM only)* journal is found exactly as before (by `flags.red-book.store`), nothing renamed or rewritten. The recording GM's first load files it, once, into a shared **Module data** journal folder (made if missing) and marks it `flags.red-book.dataFolderFiled`; a GM who moves it later keeps their choice. Remove Red Book data deletes it through core, and the folder too once nothing else is in it.
+- **Module data folder hidden** from the Journal sidebar. New switch **Show module data** on the Data page (client setting `showModuleData`, per browser, off; re-renders the Journal sidebar). Tidiness, not secrecy: players' browsers still receive those journals.
+- **Windows remember their spot** (core `RememberedWindow`): the Red Book window, Session Start, Who's online and Remove Red Book data reopen where they were left in this browser (client setting `windowPlacement`). **Reset window positions** on the Data page.
+- **Key bindings through core** (`registerOpenKeybinding`): *Quick note* (`quickNote`, Ctrl+Shift+N) and *Open Red Book* (`openRedBook`, no key) keep their action ids and defaults, so keys users chose stay.
+- **Gained this session** shows coin with core's coin text (`12g 2s 53c`) in the world's coins: the toolkit's `api.coinRatio()` when it has one, else 100 to 1 with the toolkit active and 10 to 1 without (the loot-line fallback follows the same ratio). Reward items show core's quality slot and colour when the quest stores a picture and rarity. Blocks frozen by 0.6.0 keep their text.
+- **Health fixes:** *The GM-only data journal is visible to players* gets **Set to None**, and a new line for an open-session setting pointing at a missing or ended journal gets **Clear it**; both ask first. The buttons are on the Health page and, through the registration's `fixes`, in the Wanderer's Satchel.
+- Wanderer's Satchel registration: `showModuleData` and `windowPlacement` are in `skipSettings` (never exported or imported).
+
+### Live test checklist (Untested in Foundry)
+
+Unit tests (151, passing in UTC, New York and Tokyo) cover the core pin, the picked reward, coin text and ratios, the loot fallback, reward slots and escaping, the Discord text of a slot, the store options and how the old entry is found and filed, cleanup of the filed mark, the new settings and records, the Satchel `skipSettings` and `fixes`, the key binding definitions, the window keys, the Data page and the Fix buttons. Check in a live v14 world (dnd5e 6.x) with Wanderer's Toolkit 1.29+ and the Wanderer's Satchel, one GM and one player:
+
+- [ ] Load a 0.6.0 world with board pins: the *Red Book data (GM only)* journal moves into *Module data* once (flag `dataFolderFiled`), pins and prep list unchanged; move it back to the root and reload: it stays at the root.
+- [ ] A fresh world: the first pin creates the journal inside *Module data* with the About page.
+- [ ] The Journal sidebar hides *Module data* (and its search can't find the entry); *Show module data* on the Data page shows it at once, in this browser only. Another module's switch also shows it.
+- [ ] Set the store journal to Observer for a player: Health shows the warning with **Set to None**; confirm: ownership back to None, line ok. Same from the Satchel's health page.
+- [ ] Delete the open session's journal (or set `openSession` to an ended one by hand): Health shows **Clear it**; confirm: the setting is empty, nothing else changed.
+- [ ] Move and resize the Red Book window, Session Start, Who's online and Remove data, close, reload: each opens where it was. Shrink the browser: windows stay on screen. **Reset window positions**: default spots on the next opening.
+- [ ] Ctrl+Shift+N still opens the quick note; a key a user had set for *Open Red Book* still works (Configure Controls shows both under Red Book, GM only).
+- [ ] Complete a quest whose players picked a choice reward: *Gained this session* lists the fixed items and the picked one (picture with quality border, name in the quality colour) in the log, recap and Discord post (no quality word in the Discord text). No pick: only the fixed items.
+- [ ] Coin in three-coin and standard worlds: the amounts match the toolkit's coin log.
+- [ ] Windows and the Gained block in the dark and the light theme (core revision 3).
+- [ ] Remove Red Book data with the store ticked: the journal goes, and *Module data* too when no other module's journal is in it; settings reset clears this browser's window spots and Show module data.
+
 ## 0.6.0 (2026-11-01)
 
 Five new features, each with its own switch on the Features page (all on by default, all need the session log), and full dates on every log line.
