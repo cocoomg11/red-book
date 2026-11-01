@@ -1,41 +1,48 @@
 # CLAUDE.md: Red Book
 
-Foundry VTT module (v13 minimum, verified v14 build 369; any system, extra dnd5e 6.x support) that cuts GM prep: session log, next-session board, scene readiness check. Logic only; campaign content stays in each world. Public repo, MIT.
+Foundry VTT module (v13 minimum, verified v14 build 369; any system, extra dnd5e 6.x support) that cuts GM prep: session log, next-session board, scene readiness check, Session Start, Who's online. Built on **wanderers-core 0.2.0** (vendored in `vendor/wanderers-core/`, pinned by `wanderers-core.lock.json`; never edit it by hand: `node vendor/wanderers-core/vendor.mjs update X.Y.Z`; core's CONVENTIONS.md applies). Logic only; campaign content stays in each world. Public repo, MIT.
 
 ## File map (`scripts/`)
-- `main.mjs` entry: settings, menus, scene-control buttons, header/context hooks, the API (`game.modules.get("red-book").api`).
-- `const.mjs` module id, socket name, hook names, `esc`/`plain`/`plural`. The id lives only here (and module.json).
-- `features.mjs` feature registry (`FEATURES`, `on(id)`, `need(id)`); `settings-model.mjs` every other setting (tab, Basic/Advanced, label, hint, converters; pure); `settings.mjs` registers them.
-- `leader-model.mjs` (pure) / `leader.mjs`: one writing client: per-client session id, ping/here/bye over the socket, earliest-started session of the active GM user leads, settle window, request routing (`request(kind, data)` → leader's `handle(kind, fn)`) with request-id de-dup, `broadcastHook`.
-- `session-model.mjs` (pure) / `session.mjs`: session log: events, caps, coalescing, inventory diffs, time totals, NPCs met, toolkit quest/travel/loot-roll readers, summary, timeline HTML, recap stripping.
-- `board-model.mjs` (pure) / `board.mjs`: next-session board: UUID extraction, active quests, link grouping, pins.
-- `check-model.mjs` (pure) / `check.mjs`: scene readiness: rules, path list, `PathCache`, Monk's Active Tiles reader, report HTML / scene facts, HEAD probe, results window, export.
-- `cleanup-model.mjs` (pure) / `cleanup.mjs`: Remove Red Book data (dry run, REMOVE confirm).
-- `health.mjs` read-only health lines; `panel.mjs` control panel; `ui.mjs` dialogs, folders, open-by-UUID; `log.mjs` debug logging.
+- `main.mjs` entry: settings, menus, scene-control buttons, header/context hooks, the API (`game.modules.get("red-book").api`), the leader's one-time GM work (`migrate.mjs`).
+- `core.mjs` the one place core is bound to Red Book: `F` (createFeatures), `S`/`get`/`set` (createSettings), `log`/`warn`, `L` (createLeader with `REQUESTS`, the broadcast hook list `BROADCAST` and `leaderHook`).
+- `const.mjs` module id, socket name, hook names, toolkit/MATT ids; re-exports core's `esc`/`plain`/`plural`. The id lives only here (and module.json).
+- `features.mjs` the pure feature list (`FEATURE_LIST`, `FEATURES`, `FEATURE_KEYS`); `settings-model.mjs` every other setting (core `defineSettings` rows; tabs; Basic/Advanced); `requests.mjs` the socket request schemas (core `defineRequests`).
+- `session-model.mjs` (pure) / `session.mjs`: session log: events, caps, coalescing, inventory diffs, time totals, NPCs met, toolkit quest/travel/loot-roll readers, summary, timeline HTML, recap stripping, `eventHookPayload` (ids only).
+- `board-model.mjs` (pure) / `board.mjs`: next-session board: UUID extraction, active quests, link grouping, pins (kept in the GM-only store).
+- `store-model.mjs` (pure) / `store.mjs`: the GM-only store journal (`flags.red-book.store`, ownership None): board pins, the one-time `boardPins` setting move.
+- `check-model.mjs` (pure) / `check.mjs`: scene readiness: rules, path list, `PathCache`, Monk's Active Tiles reader, report HTML / scene facts, HEAD probe, results window, export, `gateApi` (GM-only API wrapper), `isToolkitPin`.
+- `start-model.mjs` (pure) / `start.mjs`: Session Start dialog (scene list, activate, unpause, start the log).
+- `online-model.mjs` (pure, ported from the toolkit) / `online.mjs`: Who's online: roster, changes, hook payload and names, panel placement, the Hub section in core's shared scene tab.
+- `migrate-model.mjs` (pure) / `migrate.mjs`: one-time carry-over of the toolkit's Session Start / Who's online settings and Hub flags (record `migrations`).
+- `cleanup-model.mjs` (pure) / `cleanup.mjs`: Remove Red Book data (core dry run, confirm word, flag and setting helpers).
+- `health.mjs` read-only report (core `healthCollector`); `panel.mjs` control panel; `ui.mjs` dialogs, folders, open-by-UUID.
 - `styles/red-book.css`, `lang/en.json` (empty: strings are plain English in code).
 
 ## Key patterns
-- **Feature registry:** `sessionLog`, `prepBoard`, `sceneCheck`, world settings `feature-<id>` (reload). A turned-off tool registers no hooks, buttons, key bindings or socket handlers; its API getter returns undefined.
-- **One writer:** every automatic write goes through `session.record()` / `flush()`, which run only when `L.isLeader()`. Other clients (other GM tabs, players resting, anyone calling `Journal.show`) call `L.request(kind, data)`; handlers check the sending user's rights (Foundry's sender id, never the payload). Request ids are de-duplicated by `seenCache`.
+- **Feature registry:** `sessionLog`, `prepBoard`, `sceneCheck`, `sessionStart`, `whosOnline`, world settings `feature-<id>` (reload). A turned-off tool registers no hooks, buttons, key bindings or socket handlers; its API getter returns undefined.
+- **One writer (core `createLeader`):** every automatic write goes through `session.record()` / `flush()`, which run only when `L.isLeader()`. Other clients (other GM tabs, players resting, anyone calling `Journal.show`) call `L.request(kind, data)`. Core reads each request through `requests.mjs` (unknown kinds/fields, wrong types, oversize, bad request ids refused; per-user rate limit; unknown senders refused; `from: "gm"` kinds refused from players) and passes Foundry's sender user; handlers still check that user's rights (e.g. owns the actor). Never add a payload user field. A new request kind needs a schema and a test.
+- **Broadcast hooks carry ids only.** `L.broadcastHook` sends to every client, players included, and core accepts it only from the GM leader session. Never put log text, notes, summaries or anything GM-only in a broadcast payload; GM clients read the journal. Only names in `core.mjs` `BROADCAST` can be broadcast.
+- **GM-only data never goes in a world setting** (every client receives every world setting). Use the GM-only store journal (`store.mjs`) or a GM-only journal's flags. GM-only API members are wrapped with `gateApi` (warn "GM only", return undefined).
 - **Session storage:** `flags.red-book.session` on the session's JournalEntry (`SESSION_VERSION`, read through `normalizeSession`), the *Timeline* page (`flags.red-book.timeline`) is rebuilt from it; the *Notes* page is the GM's. World setting `openSession` holds the open entry id. Recaps: separate entry with `flags.red-book.recap = { session, v }`, ownership default Observer.
-- **Caps:** `EVENTS_MAX` 1000 (notes kept last), `MET_MAX` 500, `PINS_MAX` 50, `SEEN_MAX` 200, `IGNORED_MAX` 500 per scene, path cache 2000 entries. A new list-like store gets a cap and a test.
+- **Caps:** `EVENTS_MAX` 1000 (notes kept last), `MET_MAX` 500, `PINS_MAX` 50 (store), `SEEN_MAX` 200 (core), `IGNORED_MAX` 500 per scene, path cache 2000 entries. A new list-like store gets a cap and a test.
 - **Hot hooks** (`updateActor`, `updateToken`, `updateItem`, `updateWorldTime`, …) bail on their first line unless a session is recording on this client and the change touches what we read (`foundry.utils.hasProperty(changes, …)`).
 - **Scene check is read-only** for the scenes' content. Facts are gathered into plain objects (`sceneFacts`), the rules are pure. The one write: the GM's ignored findings, `flags.red-book.ignoredChecks` on the scene (`{ v, entries: [{ key, at, by, name }] }`, `IGNORED_MAX` 500), GM clicks only. Each finding has a stable `key` (`findingKey(rule, subject, variant)`: `rule[.variant][:subjectId]`); never change an existing rule's key shape or saved ignores stop matching. A new finding in a rule that can say two things about one subject needs its own variant. v14 backgrounds live on levels (`scene.initialLevel.background.src`); v13 on `scene.background.src`.
-- **Toolkit integration** is read-only: quest flags `flags.wayfarers-toolkit.quest` (or `api.quests.list()`), the Travel Log page text, `flags.wayfarers-toolkit.lootRoll` on chat messages (`status: "done"`). Never write toolkit data.
+- **Toolkit integration** is read-only: quest flags `flags.wayfarers-toolkit.quest` (or `api.quests.list()`), the Travel Log page text, `flags.wayfarers-toolkit.lootRoll` on chat messages (`status: "done"`); the scene check skips Notes with `flags.wayfarers-toolkit.pin`. Never write toolkit data.
+- **Moved from the toolkit (0.3.0): Session Start and Who's online.** Names: features `sessionStart` / `whosOnline`; settings `hiddenScenes`, `onlineCount`, `onlineList`, `onlinePosition`, `onlineDrag`, `onlineLegacyHooks` (world), `onlineHudPos` (client); scene flag `flags.red-book.hubScene` (in core's Table Tools tab, `sceneTab.addSection("red-book")`); hooks `red-book.playerCountChanged` / `red-book.allPlayersOnline` (payload `{ online, expected, all, missing, users }`, fired locally on each client), plus the old `wayfarers-toolkit.*` names unless `toolkitProvides()` (toolkit active with `api.online`) or `onlineLegacyHooks` is off. `migrate.mjs` copies the toolkit's stored settings and `flags.wayfarers-toolkit.hub` once (record `migrations.toolkit`), never deleting toolkit data; our own stored values win. Session Start posts no recap and doesn't write the toolkit's Travel Log.
 - **`Journal.show` wrap:** no core hook fires when a journal is shown, so `session.mjs` wraps the static method (original always runs first). Re-check on each Foundry release.
 - Windows use the `rb-window` class (no backdrop blur). Flags only under `flags.red-book.*`; settings only under `red-book.*`.
 - **Cleanup covers everything we write:** a new flag, setting, document or folder must be found by `cleanup-model.mjs` `plan()`.
 - **Docs:** README *Public API and hooks* lists every `api.*` entry and hook, marked stable or experimental. Update it with any change.
 
 ## Tests
-- `npm test` = `node --test tests/*.test.mjs`; `npm run check` syntax-checks scripts and tests. CI runs both (`test.yml`); the Release workflow runs them again.
-- Pure and tested: leader election and de-dup, session model (caps, coalescing, inventory, time, HP/level transitions, NPCs met, toolkit readers, summary, timeline), recap stripping, board links and pins, every readiness rule, path cache, settings table, cleanup plan, features.
+- `npm test` = `node --test tests/*.test.mjs`; `npm run check` syntax-checks scripts and tests; `npm run lint` (core's ESLint config); `npm run types` (JSDoc via tsc; not in CI yet, `types: false` in `test.yml`, until the older files are clean). CI is core's reusable `module-checks.yml@v0.2.0` (pin check, syntax, lint, tests); the Release workflow runs the tests and `verify --remote` again.
+- Leader election and request reading are tested in core. Pure and tested here: request schemas, hook payloads (ids only), GM-only gate, session model (caps, coalescing, inventory, time, HP/level transitions, NPCs met, toolkit readers, summary, timeline), recap stripping, board links and pins, the store and pin move, every readiness rule and the toolkit pin filter, path cache, settings table, cleanup plan, features, Who's online model, Session Start scene list, toolkit carry-over plan.
 - Not testable in Node: hooks, sockets, ApplicationV2 windows, journal writes, HEAD probes. List what's untested in the changelog's live checklist.
 
 ## Release process
 1. Bump `version` in `module.json` and the `download` URL (`.../releases/download/vX.Y.Z/module.zip`); the manifest URL stays `https://github.com/cocoomg11/red-book/releases/latest/download/module.json`.
 2. Add a `CHANGELOG.md` section with an "Untested in Foundry" checklist.
-3. Commit and push to main. **Agents never tag or publish.** The user publishes the GitHub release with a tag `vMAJOR.MINOR.PATCH` only (the workflow fails on anything else); the Release workflow tests, sets version/URLs and uploads `module.json` + `module.zip` (`module.json scripts styles lang README.md CHANGELOG.md LICENSE`). A new top-level folder must be added to the zip step.
+3. Commit and push to main. **Agents never tag or publish.** The user publishes the GitHub release with a tag `vMAJOR.MINOR.PATCH` only (the workflow fails on anything else); the Release workflow tests, sets version/URLs and uploads `module.json` + `module.zip` (`module.json scripts styles lang vendor README.md CHANGELOG.md LICENSE`, minus `vendor/wanderers-core/config/` and `vendor/wanderers-core/vendor.mjs`). A new top-level folder must be added to the zip step.
 4. Keep `compatibility` honest (minimum 13, verified = newest build checked live). Optional modules go in `relationships.recommends`.
 
 ## Rules

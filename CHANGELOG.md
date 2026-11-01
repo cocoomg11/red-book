@@ -1,5 +1,66 @@
 # Changelog
 
+## 0.3.0 (2026-11-01)
+
+### Added
+- **Session Start** (new tool, can be turned off): one GM dialog to begin the evening. Pick the scene, activate it for players, unpause, and start the session log. Scenes matching *Scenes left out of the list* (a regular expression) aren't offered. Token controls (flag button), control panel, or `api.sessionStart.open()`. No recap is posted.
+- **Who's online** (new tool, can be turned off): who's connected, with each player's character portrait and name. A small panel shows on scenes marked **Hub scene** (Scene Configuration › *Table Tools* tab › Red Book). Everyone can drag it by its title, and double-click puts it back. There's also a window from the control panel or `api.online.open()`. It says "Everyone's here" when all the players who count are connected, and fires `red-book.playerCountChanged` and `red-book.allPlayersOnline`.
+- Both tools came from Wayfarer's Toolkit. On the first GM load, Red Book copies the toolkit's settings for them (who counts, the list of users, panel position, dragging, hidden scenes) and marks the toolkit's Hub scenes as Red Book Hub scenes. The toolkit's own data isn't changed or deleted. Each browser's dragged panel spot comes over too.
+- **Old hook names still fire.** World scripts written for the toolkit keep working: `wayfarers-toolkit.allPlayersOnline` and `wayfarers-toolkit.playerCountChanged` fire alongside the new names, with the same payload. They're skipped while the toolkit still has its own Who's online (so nothing fires twice). There's also a setting to turn them off (Who's online › Advanced).
+
+### Changed
+- **Built on wanderers-core 0.2.0** (bundled in `vendor/`, pinned and hash-checked). Red Book now uses core for features, settings, debug logging, the one recording tab, socket requests, health checks and cleanup. CI uses core's shared checks.
+- `red-book.eventLogged` now carries ids only: `{ session, event: { id, type, t, wt } }`. Read the full event on a GM client with `api.session.get(session)`.
+- `red-book.sessionEnded` no longer carries the summary: `{ session, uuid, name }`. Read it with `api.session.get(session).summary`.
+- `red-book.recapShared` fires on the GM client that shared the recap only.
+- `api.session.log(type, text, { refs, private })` now checks its input strictly: a type is letters only, text is at most 2000 characters, refs are document UUIDs.
+
+### Security
+- **Session events no longer reach players.** Every logged event, including GM-only notes and threads, used to be broadcast to every client. Now only ids are sent.
+- **Broadcast hooks are accepted only from the GM's recording tab.** Before, any client could make every other client fire a Red Book hook.
+- **Requests from other clients** (rests, journals shown, notes, start/end) are checked against a schema and rate-limited per user. They are refused when Foundry doesn't know the sender. The sender is never read from the message.
+- **GM-only API**: for players, `api.panel()`, `api.health()`, `api.cleanup.*`, `api.session.*` and `api.board.*` show "GM only" and return nothing.
+- **Board pins moved out of a world setting** (every client receives world settings) into a GM-only journal, *Red Book data (GM only)*, with ownership None. This happens once, automatically, on the GM's first load. The old setting is emptied.
+
+### Fixed
+- The scene check no longer reports Wayfarer's Toolkit map pins as "map note isn't linked to a journal".
+- `api.panel()` no longer opens the control panel for players.
+
+### Live test checklist (Untested in Foundry)
+
+Unit tests (67) cover the request schemas, the ids-only hook payload, the GM-only gate, the toolkit pin filter, the store and the pin move, Who's online counting, hooks and placement, the Session Start scene list, the toolkit carry-over plan and the settings. Check these in a live v14 world (dnd5e 6.x), with one GM and at least one player:
+
+**Core and the recording tab**
+- [ ] The world loads with no console errors for GM and player. `api.leader()` on the GM shows `started: true, leader: true`.
+- [ ] Two GM tabs: only one records. Close it and the other takes over. A quick note typed in the second tab is logged once.
+- [ ] Foundry passes the sender id to socket handlers. A player finishes a dnd5e rest: it's logged (if not, the sender id isn't arriving and every request is refused). Show a journal to players from a GM tab that isn't recording: it's logged once.
+- [ ] Health (control panel Overview) lists every line with no "A check failed to run".
+
+**Leaks to players (open the browser console on a player client)**
+- [ ] Start a session, add a GM-only note (`#private`) and an open thread, then end the session. Run `Hooks.on("red-book.eventLogged", console.log)` on the player before the notes. The player sees only `{ session, event: { id, type, t, wt } }`, with no text. `red-book.sessionEnded` has no summary.
+- [ ] On the player, `game.journal.filter(j => j.flags?.["red-book"])` lists **no** session logs and **not** *Red Book data (GM only)*. Recaps shared with players should be listed. If GM-only journals do show up on players, tell the developer: the store and logs rely on Foundry not sending ownership-None documents to players.
+- [ ] On the player, `game.settings.get("red-book", "boardPins")` returns an empty list after the GM has loaded once.
+- [ ] As the player, `game.modules.get("red-book").api.panel()`, `.health()`, `.cleanup.plan()`, `.session.list()` and `.board.pins()` each warn "GM only" and return undefined. No control panel opens.
+- [ ] A player running `game.socket.emit("module.red-book", { action: "hook", name: "red-book.sessionStarted", sid: "abcdabcdabcdabcd", payload: {} })` doesn't fire the hook on other clients.
+
+**Board pins move**
+- [ ] On a world with pins from 0.2.0: after the GM loads, the board shows the same pins, a GM-only journal *Red Book data (GM only)* exists (ownership None), and pin/unpin still work. Reload: pins are kept and nothing moves twice.
+- [ ] Remove Red Book data lists the data journal under its own category and deletes it.
+
+**Scene check**
+- [ ] A scene with toolkit map pins and a plain unlinked map note: only the plain note is reported.
+
+**Session Start**
+- [ ] The flag button (token controls) opens the dialog. It hides scenes matching the pattern (also after migration from the toolkit's setting). Start activates the scene, unpauses, and starts the session log. With a session already open, the log box is greyed out.
+- [ ] Turn the feature off: no button, `api.sessionStart` is undefined.
+
+**Who's online and Hub after migration**
+- [ ] On a world that used the toolkit's Who's online: after the GM's first load, Red Book's Who's online settings match the toolkit's. Scenes that were toolkit Hubs are ticked under Scene Configuration › *Table Tools* › Red Book › *Hub scene*. The toolkit's own flags and settings are unchanged.
+- [ ] With both modules active and the toolkit's Who's online still on: two panels show (the toolkit's and Red Book's). `wayfarers-toolkit.allPlayersOnline` fires once (from the toolkit), not twice. Turn one of them off.
+- [ ] With the toolkit's Who's online removed or off: `wayfarers-toolkit.allPlayersOnline` and `.playerCountChanged` fire from Red Book. With *Also fire the old hook names* off, they don't.
+- [ ] The panel shows on Hub scenes only. A player connecting or leaving updates it, and "Everyone's here" appears when the last player arrives. Dragging moves it and it stays there after a reload. Double-click puts it back. Resizing the window keeps it on screen.
+- [ ] The *Table Tools* scene tab shows Red Book's section next to the other modules' sections, if those are installed. Saving the scene keeps the Hub tick.
+
 ## 0.2.0 — 2026-10-31
 
 - **Scene check: ignore a finding.** Each finding in the readiness window has an Ignore button. Ignored findings stop counting toward the totals and the scene's all-clear, and sit in a collapsed *Ignored (n)* list with Un-ignore. Saved per scene in `flags.red-book.ignoredChecks` (`{ v, entries: [{ key, at, by, name }] }`, at most 500), keyed by rule and subject (e.g. `npcStats.hp:<tokenId>` for one NPC, `walls` for a scene-wide rule). Entries whose finding no longer comes up are kept, just not shown. *Clear ignored* per scene in the window; *Clear all ignored warnings…* (with a confirm) on the control panel's Scene check tab. GM only. Export lists ignored findings separately, marked ignored. Remove Red Book data's flags category covers it. API: `sceneCheck.ignored`, `ignore`, `unignore`, `clearIgnored`, `clearAllIgnored`.

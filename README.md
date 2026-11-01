@@ -1,6 +1,6 @@
 # Red Book
 
-A Foundry VTT module (v13 and v14, any game system, extra support for dnd5e) that cuts GM prep: it **writes the session log for you while you play**, puts **everything you need for next session on one board**, and **checks your scenes before the players see them**.
+A Foundry VTT module (v13 and v14, any game system, extra support for dnd5e) that cuts GM prep: it **writes the session log for you while you play**, puts **everything you need for next session on one board**, **checks your scenes before the players see them**, starts the evening in **one click**, and shows **who's online**.
 
 Every tool can be turned off. A turned-off tool registers nothing.
 
@@ -13,6 +13,8 @@ Every tool can be turned off. A turned-off tool registers nothing.
 - [How to use: Session log](#session-log)
 - [How to use: Next-session board](#next-session-board)
 - [How to use: Scene readiness check](#scene-readiness-check)
+- [How to use: Session Start](#session-start)
+- [How to use: Who's online](#whos-online)
 - [Control panel and settings](#control-panel-and-settings)
 - [Several GMs or several tabs](#several-gms-or-several-tabs)
 - [Data Red Book writes, and removing it](#data-red-book-writes-and-removing-it)
@@ -25,15 +27,18 @@ Every tool can be turned off. A turned-off tool registers nothing.
 |---|---|---|
 | Session log | `sessionLog` | Start and end a session; while it's open a GM-only journal fills with a timeline (real and in-world time): scenes activated, combats (combatants, defeated), characters at 0 HP and creatures killed, rests, items and coin gained or lost, world time advanced, journals shown, NPCs met, level-ups, and your quick notes. Ending adds a summary. **Share as recap** makes a player copy you review first. |
 | Next-session board | `prepBoard` | One GM window: active quests and their next objectives, the NPCs, journals and scenes those quests link to, open threads and the summary from the last session, and your own pinned documents. |
+| Session Start | `sessionStart` | One GM dialog: pick the scene, activate it for players, unpause, and start the session log. |
+| Who's online | `whosOnline` | Who's connected, with their character's portrait and name: a small movable panel on scenes you mark Hub, and a window. Says "Everyone's here" and fires hooks for world scripts. |
 | Scene readiness check | `sceneCheck` | A read-only audit of a scene, a folder or every scene: missing images and sounds, walls and doors, lights, token vision and links, NPC stats, map notes, linked journals, active tile actions and player characters. Each finding has a button that opens the thing to fix. GM only. |
 
-Optional: with **Wayfarer's Toolkit** active, its quests feed the board and its quests, objectives, travel, flights and loot rolls are logged too. With **Monk's Active Tiles** active, tile actions that point at deleted documents are reported.
+Optional: with **Wayfarer's Toolkit** active, its quests feed the board and its quests, objectives, travel, flights and loot rolls are logged too (its map pins are left out of the scene check). With **Monk's Active Tiles** active, tile actions that point at deleted documents are reported.
 
 ## Quick start
 
 1. Install from the manifest URL `https://github.com/cocoomg11/red-book/releases/latest/download/module.json` and enable the module.
 2. As GM, open **Game Settings › Configure Settings › Red Book › Open the control panel**. The Overview tab shows what's working.
-3. Click **Start session** (control panel, or the book button in the token controls on the left). Play. Press **Ctrl+Shift+N** for a quick note.
+3. Click **Session Start** (the flag button in the token controls on the left): pick the scene, and Red Book activates it, unpauses and starts the session log. Play. Press **Ctrl+Shift+N** for a quick note.
+   To show who's here, open a scene's configuration, go to the **Table Tools** tab and tick **Hub scene**.
 4. Click **End session**. Open the log in the *Session Log* journal folder, add anything to its *Notes* page, then click **Share as recap** in the journal's header menu.
 5. Before next session, open the **Next-session board** (thumbtack button) and run **Check scene readiness** (clipboard button) on the scenes you'll use.
 
@@ -98,19 +103,38 @@ Run it from the clipboard button (the viewed scene), the control panel (*Check s
 
 Files are checked with a HEAD request to your Foundry server, a few at a time, with a time-out (a file that doesn't answer is reported as *couldn't be checked*, not missing), and remembered for five minutes. Files on other websites aren't checked. **Export to journal** writes the results to a GM-only *Scene check* journal (one page per scene, replaced on each export); ignored findings are listed separately, marked *ignored*. Every check can be turned off (Scene check tab, Advanced).
 
+## Session Start
+
+Click the flag button in the token controls (GM), the control panel's **Session Start…**, or `api.sessionStart.open()`.
+
+- Pick the scene (the one you're viewing is selected), then tick or untick **Activate it for players**, **Unpause the game** and **Start the session log**. The last one is greyed out when a session is already open, and missing when the session log is turned off.
+- **Scenes left out of the list** (Session Start tab): a regular expression, for example `^(Test map|NPC gallery)$`. Matching scenes aren't offered. Blank offers every scene.
+
+## Who's online
+
+- **Hub scenes**: in a scene's configuration, open the **Table Tools** tab and tick **Hub scene (show who's online)** in the Red Book section. Everyone viewing that scene sees a small panel of the players: each one's character portrait and name, greyed out when not connected, plus anyone else online (GMs, players who don't count).
+- The panel says **x of y here**, then **Everyone's here** when all the players who count are connected.
+- **Who counts** (Who's online tab): every player user, players with an assigned character (default), or only the users you list (Advanced).
+- **Moving it**: drag the panel by its title. Each browser keeps its own spot, always on screen. Double-click the title to put it back where the *Panel position* setting says.
+- The control panel's **Who's online** button (or `api.online.open()`) opens the same board as a window, for anyone.
+- **Hooks for world scripts**: `red-book.playerCountChanged` fires whenever the count changes, and `red-book.allPlayersOnline` when everyone's here. They fire on every client, so a script that changes documents should check `game.users.activeGM?.isSelf`. Scripts written for Wayfarer's Toolkit keep working: the old names `wayfarers-toolkit.playerCountChanged` / `.allPlayersOnline` fire too, unless the toolkit still has its own Who's online (then the toolkit fires them) or you turn off *Also fire the old hook names*.
+- **Moving from Wayfarer's Toolkit**: on the GM's first load of 0.3.0, Red Book copies the toolkit's Who's online and Session Start settings and its Hub scene ticks. The toolkit's own data stays as it was. Turn the toolkit's copies of these tools off so you don't get two panels.
+
 ## Control panel and settings
 
-Module Settings › Red Book › **Open the control panel**. Tabs: Overview (health and the main buttons), Features (one switch per tool; reloads), Session log, Next-session board, Scene check (each with an Advanced section), Data (Debug logging and Remove Red Book data).
+Module Settings › Red Book › **Open the control panel**. Tabs: Overview (health and the main buttons), Features (one switch per tool; reloads), Session log, Next-session board, Scene check, Session Start, Who's online (each with an Advanced section where it has one), Data (Debug logging and Remove Red Book data). The control panel and every GM tool are GM only.
 
 ## Several GMs or several tabs
 
-Exactly one client records and writes: the active GM user's earliest-opened tab. GM tabs find each other over the module socket and ping every two seconds; closing the recording tab hands over at once, a crashed one after two missed pings. Notes typed in another tab, and rests or journal shows on other clients, are sent to the recording tab with a request id so nothing is logged twice.
+Exactly one client records and writes: the active GM user's earliest-opened tab. GM tabs find each other over the module socket and ping every two seconds; closing the recording tab hands over at once, a crashed one after two missed pings. Notes typed in another tab, and rests or journal shows on other clients, are sent to the recording tab with a request id so nothing is logged twice. The recording tab checks each request: its shape, a per-user rate limit, and who sent it (as Foundry reports it). For example, a rest is logged only from a user who owns that character. Hooks broadcast to other clients are accepted only from the GM's recording tab, and they carry ids, never the log's text.
 
 ## Data Red Book writes, and removing it
 
 - Journal entries: session logs (`flags.red-book.session`, versioned, at most 1000 events and 500 NPCs met per session), recaps (`flags.red-book.recap`), the *Scene check* report journal (`flags.red-book.reports`). Folders it made carry `flags.red-book.folder`.
 - Scenes: the scene check's ignored findings (`flags.red-book.ignoredChecks`: `{ v, entries: [{ key, at, by, name }] }`, at most 500 per scene). Remove Red Book data's *flags* category removes them too.
-- World settings under `red-book.*`, including the pinned list (`boardPins`, versioned, at most 50) and the open session id.
+- A GM-only journal *Red Book data (GM only)* (`flags.red-book.store`: `{ v, pins, migrated }`; ownership None), holding the board's pins (versioned, at most 50). Before 0.3.0 the pins were in the world setting `boardPins`; the GM's first load moves them and empties the setting.
+- Scenes: the Hub scene tick (`flags.red-book.hubScene`).
+- World settings under `red-book.*`, including the open session id and `migrations` (what the one-time carry-over from the toolkit has done). One client setting per browser: `onlineHudPos` (where you dragged the Who's online panel).
 - **Remove Red Book data** (Module Settings, or the control panel's Data tab) shows a dry run with counts and names, then removes only the ticked categories after you type REMOVE.
 
 ## Public API and hooks
@@ -119,20 +143,27 @@ Exactly one client records and writes: the active GM user's earliest-opened tab.
 
 | API | Status |
 |---|---|
+| (GM only: for other users every `session.*` and `board.*` member warns "GM only" and returns undefined) | |
 | `session.start()`, `session.end()`, `session.note(text, { thread, private })`, `session.noteDialog()`, `session.current()`, `session.list()`, `session.get(idOrEntry)`, `session.shareRecap(idOrEntry)` | stable |
 | `session.log(type, text, { refs, private })` (add an event from another module), `session.flush()` | experimental |
 | `board.open()`, `board.pins()`, `board.pin(uuid)`, `board.unpin(uuid)`, `board.model()`, `board.refresh()` | experimental |
 | `sceneCheck.run({ scenes, folder, all })`, `sceneCheck.chooser()`, `sceneCheck.checkOne(scene)`, `sceneCheck.exportReport(results)`, `sceneCheck.facts(scene)`, `sceneCheck.rules`, `sceneCheck.clearCache()`, `sceneCheck.ignored(scene)`, `sceneCheck.ignore(scene, key)`, `sceneCheck.unignore(scene, key)`, `sceneCheck.clearIgnored(scene)`, `sceneCheck.clearAllIgnored({ confirm })` (GM only: for other users every member warns "GM only" and returns undefined) | experimental |
-| `panel(tab)`, `health()`, `cleanup.plan()`, `cleanup.dryRun()`, `cleanup.remove(pick)`, `cleanup.open()`, `features.on(id)`, `features.list()`, `leader()`, `hooks` | experimental |
+| `sessionStart.open()` (GM) | experimental |
+| `online.read()`, `online.open()`, `online.refresh()`, `online.resetPosition()`, `online.isHub(scene)`, `online.hooks`, `online.legacyHooks` (everyone) | experimental |
+| `panel(tab)`, `health()` (returns `[{ title, lines: [{ level, text }] }]`), `cleanup.plan()`, `cleanup.dryRun()`, `cleanup.remove(pick)`, `cleanup.open()` (GM only: for players they warn "GM only" and return undefined) | experimental |
+| `features.on(id)`, `features.list()`, `leader()`, `hooks` | experimental |
 
 Hooks (fired with `Hooks.callAll` on every client):
 
 | Hook | Payload | Status |
 |---|---|---|
 | `red-book.sessionStarted` | `{ session, uuid, n, name }` | stable |
-| `red-book.sessionEnded` | `{ session, uuid, name, summary }` | stable |
-| `red-book.eventLogged` | `{ session, event }` | experimental |
-| `red-book.recapShared` | `{ session, recap, uuid }` (GM client only) | experimental |
+| `red-book.sessionEnded` | `{ session, uuid, name }` (0.3.0: no summary; read `api.session.get(session).summary` on a GM client) | stable |
+| `red-book.eventLogged` | `{ session, event: { id, type, t, wt } }` (ids only since 0.3.0; read the event with `api.session.get(session)` on a GM client) | experimental |
+| `red-book.recapShared` | `{ session, recap, uuid }` (the GM client that shared it only) | experimental |
+| `red-book.playerCountChanged` | `{ online, expected, all, missing, users: [{ id, name, label, active, counts }] }` (each client, from its own view) | experimental |
+| `red-book.allPlayersOnline` | same as above (when everyone who counts is here) | experimental |
+| `wayfarers-toolkit.playerCountChanged`, `wayfarers-toolkit.allPlayersOnline` | same payloads; fired for old world scripts unless the toolkit provides them or the setting is off | experimental (compatibility) |
 | `red-book.leaderChanged` | `{ leader }` (this client only) | experimental |
 
 ## License
@@ -141,4 +172,6 @@ Hooks (fired with `Hooks.callAll` on every client):
 
 ## Building from source
 
-`npm test` runs the pure-logic tests with Node's built-in test runner (Node 22, nothing to install); `npm run check` syntax-checks every script. Both run on GitHub Actions.
+Red Book bundles [wanderers-core](https://github.com/cocoomg11/wanderers-core) in `vendor/wanderers-core/`, pinned in `wanderers-core.lock.json`. Never edit it by hand. Update it with `node vendor/wanderers-core/vendor.mjs update X.Y.Z`; `npm run verify-core` checks it matches the pin.
+
+`npm test` runs the pure-logic tests with Node's built-in test runner (Node 22); `npm run check` syntax-checks every script; `npm run lint` runs ESLint with core's shared config; `npm run types` runs the JSDoc type check (not in CI yet: the older tool files aren't clean). GitHub Actions runs core's shared checks (pin, syntax, lint, tests).
