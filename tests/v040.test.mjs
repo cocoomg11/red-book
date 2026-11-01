@@ -264,15 +264,23 @@ test("past, features, tools, health and data pages render without missing string
 });
 
 // ---------------------------------------------------------------- styles
-test("styles: core's stylesheet loads first; Red Book CSS is scoped and carries the flex-shrink override", () => {
+test("styles: core's stylesheet loads first; Red Book CSS is scoped, has no override and no revision class", () => {
   const mod = JSON.parse(readFileSync(new URL("../module.json", import.meta.url), "utf8"));
   assert.equal(mod.styles[0], "vendor/wanderers-core/styles/wanderers-ui.css");
-  assert.deepEqual(UI_CLASSES, ["wc-ui", "wc-r1"]);
+  assert.equal(UI_CLASSES[0], "wc-ui"); assert.match(UI_CLASSES[1], /^wc-r\d+$/);
   const css = readFileSync(new URL("../styles/red-book.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
-  assert.match(css, /\.rb-app\.wc-ui\.wc-r1 \.wc-main > \* \{ flex-shrink: 0; \}/);
+  assert.ok(!css.includes("flex-shrink: 0"), "core 0.3.1 fixed it: no local override");
   assert.ok(!/(^|\})\s*(:root|html|body|button|input|h\d)\s*[{,]/m.test(css), "no bare element rules");
   for (const sel of css.split("}").map(b => b.split("{")[0].trim()).filter(Boolean)) {
     if (sel.startsWith("@")) continue;
     for (const s of sel.split(",")) assert.match(s.trim(), /\.rb-|^body\.theme-light \.rb-|^from|^to|^\d/, `unscoped: ${s.trim()}`);
+  }
+});
+
+test("no file hard-codes the shared stylesheet's revision class (use UI_CLASSES)", async () => {
+  const { readdirSync } = await import("node:fs");
+  for (const dir of ["scripts", "styles"]) for (const f of readdirSync(new URL(`../${dir}/`, import.meta.url))) {
+    const text = readFileSync(new URL(`../${dir}/${f}`, import.meta.url), "utf8");
+    assert.ok(!/wc-r\d/.test(text), `${dir}/${f} names a wc-r<N> class`);
   }
 });

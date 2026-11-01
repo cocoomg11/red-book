@@ -1,6 +1,7 @@
 /*
  * Red Book windows. The shared look (wc-* tokens and components) comes from wanderers-core's styles/wanderers-ui.css, loaded first
- * in module.json and active only inside ".wc-ui.wc-r1". This file adds only what core doesn't cover, scoped to Red Book's own
+ * in module.json and active only inside a window carrying core's UI_CLASSES (never written out here: the revision changes). This
+ * file adds only what core doesn't cover, scoped to Red Book's own
  * classes, built on Foundry v14's variables (--color-text-*, --color-level-*, --font-body, --font-monospace) and core's tokens, so it
  * follows body.theme-dark / body.theme-light. No backdrop blur: it costs frames in v14.
  */
@@ -9,10 +10,8 @@
 .rb-window .hint { color: var(--color-text-subtle, var(--color-text-secondary)); font-size: var(--font-size-12, 12px); margin: 2px 0 0; }
 
 /* ------------------------------------------------------------------ main window (sidebar shell from core) */
-/* Core 0.3.0's .wc-main is a flex column whose children may shrink to nothing in a short window. Drop after core 0.3.1. */
-.rb-app.wc-ui.wc-r1 .wc-main > * { flex-shrink: 0; }
-.rb-app .rb-app-body { height: 100%; min-height: 0; }
-.rb-app.wc-ui.wc-r1 .window-content { padding: 0; overflow: hidden; container: wc-r1 / inline-size; }
+/* Red Book's own narrow-layout container (core's container name carries its revision, so it isn't used here). */
+.rb-app .rb-shell { container: rb-app / inline-size; }
 .rb-app .rb-pad { padding: 8px 12px; margin: 0; }
 .rb-app .rb-ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .rb-app .rb-right { text-align: right; white-space: nowrap; }
@@ -72,12 +71,12 @@
 .rb-app .rb-ignored summary { cursor: pointer; color: var(--wc-text-3); }
 .rb-app .rb-ignored .wc-status { opacity: .75; }
 
-/* Narrow window (core turns the sidebar into a strip at 720px) */
-@container wc-r1 (max-width: 720px) {
+/* Narrow window (core turns the sidebar into a strip at 720px; these are Red Book's own grids) */
+@container rb-app (max-width: 720px) {
   .rb-app .rb-board3, .rb-app .rb-md, .rb-app .rb-session-cols { grid-template-columns: minmax(0, 1fr); }
   .rb-app .rb-quicknote { flex-wrap: wrap; }
 }
-@container wc-r1 (max-width: 980px) and (min-width: 721px) {
+@container rb-app (max-width: 980px) and (min-width: 721px) {
   .rb-app .rb-board3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 

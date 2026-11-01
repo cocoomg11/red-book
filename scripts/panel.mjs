@@ -42,8 +42,9 @@ export class RedBookApp extends foundry.applications.api.ApplicationV2 {
     if (!game.user?.isGM) { div.textContent = t("Common.gmOnly"); return div; }
     let main = "";
     try { main = this.#page(); } catch (e) { console.error(`${ID} | page ${this.page}`, e); main = `<p class="wc-status wc-bad">${UI.escText(String(e?.message ?? e))}</p>`; }
+    // The shell is returned as the window content's direct child, so core's narrow-layout container and padding rules apply.
     div.innerHTML = V.shellHTML(V.navHTML(this.page, id => F.on(id), this.#badges()), main);
-    return div;
+    return /** @type {HTMLElement} */ (div.firstElementChild);
   }
 
   #badges() {

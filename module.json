@@ -18,6 +18,11 @@
         "id": "wayfarers-toolkit",
         "type": "module",
         "reason": "Its quests feed the next-session board, and its quests, travel, flights and loot rolls are logged in the session log. Its map pins are left out of the scene check."
+      },
+      {
+        "id": "wanderers-satchel",
+        "type": "module",
+        "reason": "A GM hub for your modules: Red Book registers itself there (control panel, health check, debug logging)."
       }
     ]
   },

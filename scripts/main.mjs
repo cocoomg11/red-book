@@ -4,7 +4,7 @@
  * from core.mjs. Each tool is a feature that can be turned off; a turned-off tool registers nothing and its API entry is undefined.
  */
 import { ID, HOOKS } from "./const.mjs";
-import { F, S, L } from "./core.mjs";
+import { F, S, L, warn } from "./core.mjs";
 import * as Session from "./session.mjs";
 import * as Board from "./board.mjs";
 import * as Check from "./check.mjs";
@@ -14,6 +14,8 @@ import * as Start from "./start.mjs";
 import * as Online from "./online.mjs";
 import * as Migrate from "./migrate.mjs";
 import { report } from "./health.mjs";
+import { registration, registerWith, SATCHEL_ID } from "./satchel-model.mjs";
+import { RECORDS } from "./settings-model.mjs";
 
 const deps = { session: Session, board: Board, check: Check, cleanup: Cleanup, online: Online, start: Start };
 
@@ -69,4 +71,11 @@ Hooks.once("ready", () => {
     features: { on: F.on, list: () => F.list() },
     hooks: { ...HOOKS }
   };
+  // Wanderer's Satchel (optional GM hub): register when it's active. Its calls run on a GM's client only.
+  registerWith(registration({
+    id: ID, title: "Red Book", openPanel: () => Panel.open(), health: () => report(deps), records: RECORDS, debugKey: "debugLog"
+  }), {
+    active: () => !!game.modules.get(SATCHEL_ID)?.active, api: () => game.modules.get(SATCHEL_ID)?.api,
+    once: (h, fn) => Hooks.once(h, fn), warn: (m, e) => warn(m, e)
+  });
 });
