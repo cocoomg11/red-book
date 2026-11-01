@@ -53,9 +53,11 @@ const slow = (paths, p) => !!p && paths?.[p] === null;
  * Findings for one scene. `facts`: see check.mjs `sceneFacts`. `paths`: { [path]: true | false | null }. `off`: rule ids turned off.
  * `players`: [{ id, name, hasCharacter }] connected non-GM users. `dnd5e`: the system is dnd5e. `matt`: Monk's Active Tiles active.
  */
-export function checkScene(f, { paths = {}, off = [], players = [], dnd5e = false, matt = false } = {}) {
+export function checkScene(f, { paths = {}, off = [], players = [], dnd5e = false, matt = false } = /** @type {any} */ ({})) {
+  /** @type {any[]} */
   const out = []; const want = id => !off.includes(id);
   // `variant` tells apart two findings of one rule about the same thing; `subject` is the thing (default: the fix target unless it's the scene).
+  /** @type {(rule: string, severity: string, text: string, fix?: any, opts?: { variant?: string, subject?: string }) => number} */
   const add = (rule, severity, text, fix = null, { variant = "", subject } = {}) =>
     out.push({ rule, severity, text, fix, key: findingKey(rule, subject ?? (fix && fix.kind !== "scene" ? fix.id : ""), variant) });
   const theatre = isTheatre(f);
@@ -230,6 +232,7 @@ export function mattRefs(actions) {
  * are injectable for tests.
  */
 export class PathCache {
+  /** @param {{ probe?: (path: string) => Promise<boolean>, concurrency?: number, timeout?: number, ttl?: number, max?: number, now?: () => number, wait?: (ms: number) => Promise<any> }} [opts] */
   constructor({ probe, concurrency = 4, timeout = 4000, ttl = 5 * 60000, max = 2000, now = () => Date.now(), wait = ms => new Promise(r => setTimeout(r, ms)) } = {}) {
     this.probe = probe; this.concurrency = Math.max(1, concurrency); this.timeout = timeout; this.ttl = ttl; this.max = max; this.now = now; this.wait = wait;
     this.cache = new Map(); this.inflight = new Map(); this.queue = []; this.running = 0; this.probes = 0;
@@ -253,7 +256,7 @@ export class PathCache {
     while (this.running < this.concurrency && this.queue.length) {
       const { path, res } = this.queue.shift(); this.running++; this.probes++;
       const timeout = Promise.resolve(this.wait(this.timeout)).then(() => null);
-      Promise.race([Promise.resolve().then(() => this.probe(path)).then(v => !!v, () => null), timeout]).then(ok => {
+      Promise.race([Promise.resolve().then(() => /** @type {any} */ (this.probe)(path)).then(v => !!v, () => null), timeout]).then(ok => {
         this.running--; this.inflight.delete(path);
         // A timeout isn't remembered: the next run asks again.
         if (ok !== null) { this.cache.set(path, { ok, at: this.now() }); while (this.cache.size > this.max) this.cache.delete(this.cache.keys().next().value); }

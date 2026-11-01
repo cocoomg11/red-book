@@ -58,7 +58,9 @@ export function makeEvent(e = {}, now = Date.now()) {
 }
 
 /** Reads any stored session shape (missing v = 0: the same fields, unchecked) into the current one. */
+/** @param {any} [raw] */
 export function normalizeSession(raw = {}) {
+  /** @type {any} */
   const s = raw && typeof raw === "object" ? raw : {};
   return {
     v: SESSION_VERSION, n: Math.max(1, Math.floor(Number(s.n) || 1)), name: String(s.name ?? ""),
