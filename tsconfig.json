@@ -1,5 +1,5 @@
 {
-  "$comment": "JSDoc type check against wanderers-core's shared base. Not run in CI yet (test.yml has types: false): the older tool files aren't JSDoc-clean. Run `npm run types` locally; tests are left out on purpose.",
+  "$comment": "JSDoc type check against wanderers-core's shared base. Run in CI (test.yml has types: true) and locally with `npm run types`; tests are left out on purpose.",
   "extends": "./vendor/wanderers-core/config/tsconfig.base.json",
   "include": ["scripts/**/*.mjs", "vendor/wanderers-core/config/foundry-globals.d.ts"]
 }

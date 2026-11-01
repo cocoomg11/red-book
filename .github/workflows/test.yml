@@ -12,9 +12,9 @@ permissions:
 
 jobs:
   # wanderers-core's reusable checks: the vendored core matches its pin (and the published release), then syntax check and unit
-  # tests. ESLint is on (package.json lists eslint 10.13.0 and typescript 7.0.2 as devDependencies, with a package-lock.json); the
-  # JSDoc type check stays off because the older tool files aren't JSDoc-clean yet.
+  # tests. ESLint and the JSDoc type check (tsc) are on (package.json lists eslint 10.13.0 and typescript 7.0.2 as devDependencies,
+  # with a package-lock.json).
   checks:
     uses: cocoomg11/wanderers-core/.github/workflows/module-checks.yml@v0.3.1
     with:
-      types: false
+      types: true
