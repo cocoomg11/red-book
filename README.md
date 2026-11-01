@@ -7,6 +7,7 @@ A Foundry VTT module (v13 and v14, any game system, extra support for dnd5e) tha
 - **Scene check**: a read-only audit of your scenes before the players see them, scene list on the left, findings on the right.
 - **Session Start**: pick the scene, activate it, unpause and start the log in one step.
 - **Who's online**: a small panel on Hub scenes that says when everyone's here; it can be moved and folded.
+- **0.5.0**: quest progress and journeys from Wayfarer's Toolkit in the log and the recap, a prep list on the board fed by the scene check, a *Next session* date, an *Open Red Book* key binding, and optional Discord posts (off by default).
 
 Every tool can be turned off. A turned-off tool registers nothing. With **Wanderer's Satchel** installed, Red Book also shows up in its hub (control panel, health check, debug logging).
 
@@ -22,6 +23,8 @@ Every tool can be turned off. A turned-off tool registers nothing. With **Wander
 - [How to use: Session Start](#session-start)
 - [How to use: Who's online](#whos-online)
 - [Control panel and settings](#control-panel-and-settings)
+- [Integrations (toolkit hooks)](#integrations)
+- [Discord posts](#discord-posts)
 - [Several GMs or several tabs](#several-gms-or-several-tabs)
 - [Data Red Book writes, and removing it](#data-red-book-writes-and-removing-it)
 - [Public API and hooks](#public-api-and-hooks)
@@ -35,6 +38,11 @@ Every tool can be turned off. A turned-off tool registers nothing. With **Wander
 | Next-session board | `prepBoard` | One GM window: active quests and their next objectives, the NPCs, journals and scenes those quests link to, open threads and the summary from the last session, and your own pinned documents. |
 | Session Start | `sessionStart` | One GM dialog: pick the scene, activate it for players, unpause, and start the session log. |
 | Who's online | `whosOnline` | Who's connected, with their character's portrait and name: a small movable panel on scenes you mark Hub, and a window. Says "Everyone's here" and fires hooks for world scripts. |
+| Quest events in the log | `questEvents` | (0.5.0; needs the session log) Quests given, completed or failed and objectives ticked become timeline lines, have their own *Quests* list in the summary and so appear in the recap. Hidden quests and hidden objectives are logged as GM-only lines (left out of the recap). A change reported both by the quest's journal and by the toolkit's hook is logged once. |
+| Journeys in the log | `journeys` | (0.5.0; needs the session log) The toolkit's hex trips and flights become **Travel** lines (from, to, hours, cost), with a *Travel* filter chip. |
+| Prep list from the scene check | `prepList` | (0.5.0; needs the board and the scene check) *Add to the next-session board* on each failed finding and *Add all failures*: a to-do list on the board, grouped by scene, deduped, linking back to the scene. |
+| Open Red Book key binding | `openKey` | (0.5.0) A GM key binding that opens the Red Book window. No key is set until you pick one in Configure Controls. |
+| Discord posts | `discord` | (0.5.0; **off by default**) Posts to a Discord channel through a webhook: a summary when a session ends, the recap when you share it (optional), the next session's date when you set it. See [Discord posts](#discord-posts). |
 | Scene readiness check | `sceneCheck` | A read-only audit of a scene, a folder or every scene: missing images and sounds, walls and doors, lights, token vision and links, NPC stats, map notes, linked journals, active tile actions and player characters. Each finding has a button that opens the thing to fix. GM only. |
 
 Optional: with **Wayfarer's Toolkit** active, its quests feed the board and its quests, objectives, travel, flights and loot rolls are logged too (its map pins are left out of the scene check). With **Monk's Active Tiles** active, tile actions that point at deleted documents are reported.
@@ -66,6 +74,7 @@ Optional: with **Wayfarer's Toolkit** active, its quests feed the board and its 
   - level-ups (dnd5e: total level; other systems: `system.details.level` when present);
   - Wayfarer's Toolkit: quests given, completed, failed, reopened, objectives ticked, flights and hex travel (from its Travel Log page), finished loot rolls.
 - **End session** adds a **summary** at the top: how long you played and how much in-world time passed, counts per kind, notable moments (kills, level-ups, quests, combats) and open threads (GM-only threads in a secret block).
+- **Quest events and journeys (0.5.0)**: with the toolkit, quest lines and Travel lines come from its quest journals and its hooks (see [Integrations](#integrations)); each change is logged once. Quest lines get their own *Quests* list in the summary, so they show in the recap (except GM-only ones). The timeline has *Quests* and *Travel* filter chips.
 - **Share as recap** (journal header menu on a session log, or the Red Book window's Past sessions page): shows every list line of the session's pages with a tick box. Untick what players shouldn't see. Red Book then creates or updates a separate journal **Recap: <session name>** in the *Session Recaps* folder that players can observe. Secret blocks, GM-only notes, HTML comments and document links are always left out. The GM log itself is never made visible.
 
 ## Next-session board
@@ -127,12 +136,36 @@ Click the flag button in the token controls (GM), **Session Start…** on the Re
 - **Hooks for world scripts**: `red-book.playerCountChanged` fires whenever the count changes, and `red-book.allPlayersOnline` when everyone's here. They fire on every client, so a script that changes documents should check `game.users.activeGM?.isSelf`. Scripts written for Wayfarer's Toolkit keep working: the old names `wayfarers-toolkit.playerCountChanged` / `.allPlayersOnline` fire too, unless the toolkit still has its own Who's online (then the toolkit fires them) or you turn off *Also fire the old hook names*.
 - **Moving from Wayfarer's Toolkit**: on the GM's first load of 0.3.0, Red Book copies the toolkit's Who's online and Session Start settings and its Hub scene ticks. The toolkit's own data stays as it was. Turn the toolkit's copies of these tools off so you don't get two panels.
 
+## Integrations
+
+Red Book listens to two hooks from **Wayfarer's Toolkit** (when a toolkit version that fires them is active; older versions simply don't fire them and Red Book falls back to reading the quest journals and the Travel Log page). Both are fired with `Hooks.callAll` and carry ids and display strings only. Only the recording GM tab logs; another GM tab that hears them sends them on (GM-only, schema-checked requests); players' clients ignore them.
+
+| Hook | Payload | What Red Book does |
+|---|---|---|
+| `wayfarersToolkit.questUpdated` | `{ questId, change }`: `questId` the quest's JournalEntry id; `change` one of `"started"`, `"completed"`, `"failed"`, `"objective"`, `"updated"`, `"assigned"` | Re-reads the quest (on a GM, the toolkit's API, so hidden objectives are known) and logs what changed since it last read it. A line logged by the journal update within 15 s (same quest, same change, same objective) is not logged again. `updated` and `assigned` log only what the quest data shows changed. Feature `questEvents`. |
+| `wayfarersToolkit.journey` | `{ kind: "hex" \| "flight", fromId, toId, fromName, toName, hours, cost: { gp, sp, cp }, partyId }` (names are the strings the toolkit shows the GM) | A **Travel** line: `Flight: A → B, 2 hours, 5 gp.` The toolkit's Travel Log page gets a line for the same trip; when both come within 15 s, the hook's line is kept and the page's line is skipped. Feature `journeys`. |
+
+## Discord posts
+
+Off by default (feature `discord`). Set it up on **Tool settings › Discord**:
+
+1. In Discord: the channel's settings › Integrations › Webhooks › *New Webhook*, then *Copy Webhook URL*. Make a webhook for **one channel** used only for this.
+2. Paste it into **Webhook URL**, save, and click **Send test message**.
+3. Choose what to post: a summary when a session ends (on), the recap when you share it (off), the next session's date when you set it on the board (on). *Post as* (Advanced) is the name the posts show.
+
+**Honor system.** World settings are sent to every connected browser, so a player who opens the browser console can read the webhook URL and post to that channel. Red Book can't hide it; it's up to your table. Use a webhook for one channel you don't mind, and if the URL leaks, delete the webhook in Discord and make a new one.
+
+Only a GM's browser posts: session-end summaries come from the recording GM tab (one post even with several GMs or tabs); the recap and the next-session date from the GM who clicked. Posts are player-safe (no GM-only notes, private threads or hidden quest lines), never ping anyone, are sent as an embed (plain text if Discord refuses it), queued one at a time and retried when Discord rate-limits. A failed post shows an error to that GM only, without the URL.
+
+**Next session** (board, first column): a date and time field. Saving a new date posts it when *Post the next session's date* is on (as a Discord timestamp, so each reader sees their own time zone); *Post to Discord* posts it again. The date is a world setting (`nextSession`), so players' modules and macros can read it with `api.nextSession()`.
+
 ## The Red Book window and settings
 
 The **Red Book** button in the token controls, or Module Settings › Red Book › **Open the control panel**. A sidebar on the left (arrow keys, Home and End move between pages; it becomes a strip in a narrow window):
 
 - **Tools**: **Session** (the start page: running or not, counts, a quick note box, the timeline with filters by kind, newest 100, and *At the table*: the connected players, with each character's hit points on dnd5e), **Board**, **Scene check**, **Online**, **Past sessions** (every session log, with open and share-as-recap).
 - **Settings**: **Features** (one switch per tool; reloads), **Tool settings** (pick a tool; Advanced section where it has one), **Health**, **Data** (Debug logging and Remove Red Book data).
+- **Open Red Book** key binding (0.5.0, feature `openKey`): Configure Controls › Red Book. No key by default.
 
 The window and every GM tool are GM only. It follows Foundry's light and dark themes.
 
@@ -144,9 +177,9 @@ Exactly one client records and writes: the active GM user's earliest-opened tab.
 
 - Journal entries: session logs (`flags.red-book.session`, versioned, at most 1000 events and 500 NPCs met per session), recaps (`flags.red-book.recap`), the *Scene check* report journal (`flags.red-book.reports`). Folders it made carry `flags.red-book.folder`.
 - Scenes: the scene check's ignored findings (`flags.red-book.ignoredChecks`: `{ v, entries: [{ key, at, by, name }] }`, at most 500 per scene). Remove Red Book data's *flags* category removes them too.
-- A GM-only journal *Red Book data (GM only)* (`flags.red-book.store`: `{ v, pins, migrated }`; ownership None), holding the board's pins (versioned, at most 50). Before 0.3.0 the pins were in the world setting `boardPins`; the GM's first load moves them and empties the setting.
+- A GM-only journal *Red Book data (GM only)* (`flags.red-book.store`: `{ v, pins, migrated, todos }`; ownership None), holding the board's pins (versioned, at most 50) and, from 0.5.0, the prep list (at most 100 items). Before 0.3.0 the pins were in the world setting `boardPins`; the GM's first load moves them and empties the setting.
 - Scenes: the Hub scene tick (`flags.red-book.hubScene`).
-- World settings under `red-book.*`, including the open session id and `migrations` (what the one-time carry-over from the toolkit has done). Two client settings per browser: `onlineHudPos` (where you dragged the Who's online panel) and `onlineHudCollapsed` (whether you folded it). Scene-check results shown in the window are kept in that browser tab's memory only, until reload.
+- World settings under `red-book.*`, including the open session id, `nextSession` (0.5.0: `{ v, at }`, the board's next-session date), the Discord webhook URL and options (0.5.0; readable by players, see [Discord posts](#discord-posts)) and `migrations` (what the one-time carry-over from the toolkit has done). Two client settings per browser: `onlineHudPos` (where you dragged the Who's online panel) and `onlineHudCollapsed` (whether you folded it). Scene-check results shown in the window are kept in that browser tab's memory only, until reload.
 - **Remove Red Book data** (Module Settings, or the Red Book window's Data page) shows a dry run with counts and names, then removes only the ticked categories after you type REMOVE.
 
 ## Public API and hooks
@@ -158,7 +191,9 @@ Exactly one client records and writes: the active GM user's earliest-opened tab.
 | (GM only: for other users every `session.*` and `board.*` member warns "GM only" and returns undefined) | |
 | `session.start()`, `session.end()`, `session.note(text, { thread, private })`, `session.noteDialog()`, `session.current()`, `session.list()`, `session.get(idOrEntry)`, `session.shareRecap(idOrEntry)` | stable |
 | `session.log(type, text, { refs, private })` (add an event from another module), `session.flush()` | experimental |
-| `board.open()`, `board.pins()`, `board.pin(uuid)`, `board.unpin(uuid)`, `board.model()`, `board.refresh()` | experimental |
+| `board.open()`, `board.pins()`, `board.pin(uuid)`, `board.unpin(uuid)`, `board.model()`, `board.refresh()`, `board.todos()` (0.5.0: the prep list), `board.doneTodo(id)` (0.5.0) | experimental |
+| `discord.post({ title, text, footer })`, `discord.test()` (0.5.0, GM only; undefined while Discord posts are off) | experimental |
+| `nextSession()` (0.5.0: the next session's date in ms, 0 when not set; everyone) | experimental |
 | `sceneCheck.run({ scenes, folder, all })`, `sceneCheck.chooser()`, `sceneCheck.checkOne(scene)`, `sceneCheck.exportReport(results)`, `sceneCheck.facts(scene)`, `sceneCheck.rules`, `sceneCheck.clearCache()`, `sceneCheck.ignored(scene)`, `sceneCheck.ignore(scene, key)`, `sceneCheck.unignore(scene, key)`, `sceneCheck.clearIgnored(scene)`, `sceneCheck.clearAllIgnored({ confirm })`, `sceneCheck.results()` (0.4.0: last result per scene this load), `sceneCheck.open(sceneId)` (0.4.0) (GM only: for other users every member warns "GM only" and returns undefined) | experimental |
 | `sessionStart.open()` (GM) | experimental |
 | `online.read()`, `online.open()`, `online.refresh()`, `online.resetPosition()`, `online.toggleCollapsed(value?)` (0.4.0; this browser), `online.isHub(scene)`, `online.hooks`, `online.legacyHooks` (everyone) | experimental |
@@ -186,4 +221,4 @@ Hooks (fired with `Hooks.callAll` on every client):
 
 Red Book bundles [wanderers-core](https://github.com/cocoomg11/wanderers-core) (0.3.1, including its shared window look) in `vendor/wanderers-core/`, pinned in `wanderers-core.lock.json`. Never edit it by hand. Update it with `node vendor/wanderers-core/vendor.mjs update X.Y.Z`; `npm run verify-core` checks it matches the pin.
 
-`npm test` runs the pure-logic tests with Node's built-in test runner (Node 22); `npm run check` syntax-checks every script; `npm run lint` runs ESLint with core's shared config; `npm run types` runs the JSDoc type check (not in CI yet: the older tool files aren't clean). GitHub Actions runs core's shared checks (pin, syntax, lint, tests; types are switched off there).
+`npm test` runs the pure-logic tests with Node's built-in test runner (Node 22); `npm run check` syntax-checks every script; `npm run lint` runs ESLint with core's shared config; `npm run types` runs the JSDoc type check (zero errors). GitHub Actions runs core's shared checks (pin, syntax, lint, types, tests).

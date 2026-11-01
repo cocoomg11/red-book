@@ -1,5 +1,53 @@
 # Changelog
 
+## 0.5.0 (unreleased)
+
+Five new features, each with its own switch on the Features page (four on by default, Discord posts off).
+
+### Added
+- **Quest events in the log** (`questEvents`, needs the session log): with Wayfarer's Toolkit, quests given, completed, failed or reopened and objectives ticked during an open session become timeline lines. They come from the quest journal update and from the toolkit's new `wayfarersToolkit.questUpdated` hook (`{ questId, change }`); a change reported by both within 15 s is logged once. On a GM the full quest is read through the toolkit's API, so a hidden quest's or a hidden objective's line is logged as **GM only** (kept out of the recap). The summary has its own **Quests** list (quest lines are no longer repeated under Notable moments), so quest progress shows in the recap.
+- **Journeys in the log** (`journeys`, needs the session log): the toolkit's new `wayfarersToolkit.journey` hook (hex trips and flights) becomes a **Travel** line with route, time and cost. The Travel Log page's line for the same trip is skipped when both come within 15 s. The timeline's *Quests and travel* chip is now two chips, **Quests** and **Travel**.
+- Another GM tab that hears either hook sends it on to the recording tab (new GM-only requests `quest` and `journey`, schema-checked).
+- **Prep list from the scene check** (`prepList`, needs the board and the scene check): on the Scene check page each problem or warning has **Add to the next-session board**, and **Add all failures** adds the rest. The board's new **Prep list** panel groups them by scene (scene link, Check again, Done). Deduped by scene and finding, at most 100, kept in the GM-only store journal.
+- **Next session** date on the board (world setting `nextSession`; `api.nextSession()`).
+- **Open Red Book** key binding (`openKey`, GM): Configure Controls › Red Book. No key is set by default.
+- **Discord posts** (`discord`, **off by default**): Tool settings › Discord. A webhook URL, and posts for: a summary when a session ends (recording GM tab only), the recap when you share it (optional, off), the next-session date when you save it. Send test message button. Embeds with a plain-text fallback, no pings, one post at a time, Discord's rate limits waited out; a failed post is an error on that GM's screen only, without the URL. **Honor system**: the webhook URL is a world setting, which every browser receives, so a player with the browser console can read it; the setting's hint, the Discord page, the health check and the README say so. Use a webhook for one channel only.
+- API (experimental): `board.todos()`, `board.doneTodo(id)`, `discord.post(msg)`, `discord.test()`, `nextSession()`.
+
+### Changed
+- Built with types on (JSDoc check at zero errors in CI).
+
+### Live test checklist (Untested in Foundry)
+
+Unit tests (118) cover the quest hook reader (ids only, known changes), hidden quest/objective lines marked GM only, the dedupe keys and window, the fallback line, the summary's Quests list and the recap (GM-only quest lines stripped), the journey reader (names plain and clipped, numbers checked), the Travel line, the hook/Travel Log merge (either order, repeats, caps), the new request schemas, the Travel chip, the prep list (dedupe, cap, store), the Add to board / Add all failures buttons, the board's prep panel and Next session field, the date round trip, the Discord URL check, payload limits and no-ping, the player-safe summary and recap text, retry and rate-limit waits, error text, the Discord settings and feature defaults. Check in a live v14 world (dnd5e 6.x) with Wayfarer's Toolkit, one GM and one player:
+
+**Quest events**
+- [ ] With a session open: give, complete and fail a quest, tick an objective. Each appears **once** on the timeline, with the toolkit both with and without the new `questUpdated` hook.
+- [ ] Two objectives ticked quickly both appear. A hidden objective ticked shows a GM-only badge and isn't in the recap.
+- [ ] End the session: the summary has a Quests list; Share as recap shows the quest lines (not the GM-only ones).
+- [ ] A second GM tab (not recording) changes a quest: logged once by the recording tab.
+- [ ] Features › Quest events off (reload): no quest lines, no errors.
+
+**Journeys**
+- [ ] A hex trip and a flight with the new `journey` hook: one Travel line each with hours and cost; the Travel Log line isn't logged as well. Without the hook (older toolkit): the Travel Log line is logged as before (about 2.5 s later).
+- [ ] The Travel chip shows only Travel lines; the Quests chip only quest lines.
+
+**Prep list**
+- [ ] Scene check page: Add to board on a warning; the button becomes a pin mark. Add all failures adds the rest and then greys out. The board's Prep list shows them under the scene's name; the scene link opens it, Check again runs the check, Done removes the item.
+- [ ] A player can't see the prep list (it's in the GM-only store journal); Remove Red Book data › GM-only data journal removes it.
+
+**Next session and key binding**
+- [ ] Board › Next session: pick a date, Save (also Enter in the field). Reopen: kept. Clear removes it. `api.nextSession()` returns it on a player's client.
+- [ ] Configure Controls › Red Book › Open Red Book: no key by default; set one; it opens the window for the GM, does nothing for a player.
+
+**Discord** (turn the feature on, reload)
+- [ ] Paste a webhook URL, Save, Send test message: posted. A wrong URL: an error notice (GM only), no request sent. Health shows the honor-system line.
+- [ ] End a session: one summary post, even with two GM tabs open. Private notes, private threads and hidden quest lines aren't in it.
+- [ ] *Post the recap* on: Share as recap posts the recap text without secret blocks or unticked lines.
+- [ ] Save a next-session date: a post with the date in each reader's time zone. Post to Discord posts again.
+- [ ] Delete the webhook in Discord, then post: an error notice on the GM's screen, nothing on the player's.
+- [ ] Many posts quickly (several recaps): all arrive, none lost to rate limits.
+
 ## 0.4.0 (2026-11-01)
 
 ### Changed
