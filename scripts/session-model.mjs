@@ -289,9 +289,11 @@ export function stripSecrets(html = "") {
   return s;
 }
 const LI = /<li\b[^>]*>[\s\S]*?<\/li>/gi;
+/** Secrets and HTML comments out: the shared first step of listLines and stripForRecap, so their line numbers agree. */
+const gmFree = html => stripSecrets(html).replace(/<!--[\s\S]*?-->/g, "");
 /** The list lines of a page (after secrets are taken out), in order: [{ index, text }]. The review dialog shows these. */
 export function listLines(html = "") {
-  return [...stripSecrets(html).matchAll(LI)].map((m, index) => ({ index, text: plain(m[0]) }));
+  return [...gmFree(html).matchAll(LI)].map((m, index) => ({ index, text: plain(m[0]) }));
 }
 /**
  * The player copy of a page: secret blocks, HTML comments and the list lines at the `drop` indexes (as numbered by listLines) are
@@ -300,10 +302,43 @@ export function listLines(html = "") {
 export function stripForRecap(html = "", drop = []) {
   const gone = new Set(drop.map(Number));
   let i = -1;
-  let s = stripSecrets(html).replace(/<!--[\s\S]*?-->/g, "");
+  let s = gmFree(html);
   s = s.replace(LI, li => (++i, gone.has(i) ? "" : li));
   s = s.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/@UUID\[[^\]]*\]/g, "");
   s = s.replace(/<p class="rb-head">[\s\S]*?<\/p>/i, "");
   s = s.replace(/<ul\b[^>]*>\s*<\/ul>/gi, "");
   return s.trim();
+}
+
+/** The text of several journal pages joined for a recap, each under its page name (pages with no text are left out). */
+export function joinPages(pages = []) {
+  return pages.filter(p => p && String(p.html ?? "").trim()).map(p => `<h2>${esc(p.name)}</h2>\n${p.html}`).join("\n");
+}
+/** The player recap page: a short header and the stripped text. */
+export function recapHTML(sessionName, stripped) {
+  return `<p><em>Recap of ${esc(sessionName)}.</em></p>\n${stripped || "<p>Nothing to share.</p>"}`;
+}
+
+// ---------------------------------------------------------------- hit points and levels (state kept by the recorder)
+/**
+ * Whether a hit point change is a new drop to 0: `downed` is the set of actor UUIDs already at 0 this session (changed in place).
+ * Returns "down" (first time at 0), "up" (back above 0) or null.
+ */
+export function hpTransition(downed, uuid, hp) {
+  const v = Number(hp); if (!Number.isFinite(v)) return null;
+  if (v <= 0) { if (downed.has(uuid)) return null; downed.add(uuid); return "down"; }
+  if (downed.delete(uuid)) return "up";
+  return null;
+}
+/** A level-up line when `after` is above `before` (both numbers; a missing `before` logs nothing). */
+export function levelText(name, before, after, cls = "") {
+  const a = Number(after), b = Number(before);
+  if (!Number.isFinite(a) || !Number.isFinite(b) || a <= b) return "";
+  return `${name} reached ${cls ? `${cls} ` : ""}level ${a}.`;
+}
+/** A combat's end line: who fought and who was defeated. */
+export function combatEndText({ round = 0, combatants = [], defeated = [] } = {}) {
+  const who = combatants.length ? ` Combatants: ${combatants.join(", ")}.` : "";
+  const down = defeated.length ? ` Defeated: ${defeated.join(", ")}.` : "";
+  return `Combat ended after ${plural(Math.max(0, round), "round")}.${who}${down}`;
 }
