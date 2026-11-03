@@ -15,9 +15,9 @@ test("start banner has an opaque background in both themes", () => {
 
 test("0.8.1 version and changelog", () => {
   const read = f => readFileSync(new URL("../" + f, import.meta.url), "utf8");
-  assert.equal(JSON.parse(read("module.json")).version, "0.8.2");
-  assert.equal(JSON.parse(read("package.json")).version, "0.8.2");
-  assert.match(read("module.json"), /releases\/download\/v0\.8\.2\/module\.zip/);
+  assert.equal(JSON.parse(read("module.json")).version, "0.8.3");
+  assert.equal(JSON.parse(read("package.json")).version, "0.8.3");
+  assert.match(read("module.json"), /releases\/download\/v0\.8\.3\/module\.zip/);
   assert.match(read("CHANGELOG.md"), /^## 0\.8\.1 \(2026-11-02\)[\s\S]*?Untested in Foundry/m);
 });
 
@@ -48,4 +48,12 @@ test("0.8.2 banner has a grip handle with the buttons outside it, and drag CSS +
   assert.match(css, /\.rb-start-banner \.rb-banner-grip \{[^}]*cursor: grab/);
   assert.match(css, /\.rb-start-banner\.placed \{[^}]*transform: none/);
   assert.match(readFileSync(new URL("../scripts/cleanup-model.mjs", import.meta.url), "utf8"), /startBannerPos/);
+});
+
+// ---- 0.8.3: placed banner drops its default anchor in every theme
+test("0.8.3 placed banner rule is theme-independent and banner text inherits its colour", () => {
+  const css = readFileSync(new URL("../styles/red-book.css", import.meta.url), "utf8");
+  assert.match(css, /(^|\n)\.rb-start-banner\.placed \{ bottom: auto; transform: none; \}/);
+  assert.doesNotMatch(css, /theme-light \.rb-start-banner\.placed/);
+  assert.doesNotMatch(css, /\.rb-start-banner \.rb-banner-text \{ color:/);
 });

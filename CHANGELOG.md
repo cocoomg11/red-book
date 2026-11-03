@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.3 (2026-11-02)
+
+### Fixed
+- **Dragging the start banner stretched it instead of moving it** (dark theme). The rule that drops the banner's default bottom-centre anchor while it is placed only applied in the light theme, so in the dark theme the banner kept its bottom edge and centring and grew taller as it was dragged up. It now applies in both themes.
+- **The banner text was dark in the dark theme.** It now follows the banner's own text colour (light on dark, dark on light).
+
+### Untested in Foundry
+- [ ] Dark and light theme: drag the banner up, down and sideways; it moves as one piece and keeps its size.
+- [ ] Banner text readable in both themes.
+
 ## 0.8.2 (2026-11-02)
 
 ### Changed

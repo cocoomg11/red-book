@@ -2,7 +2,7 @@
   "id": "red-book",
   "title": "Red Book",
   "description": "Less prep for the GM, in one window with a native Foundry look (light and dark). A session dashboard that logs the game as you play (scenes, combats, downs, rests, loot, time, journals shown, NPCs met, level-ups and quick notes), with a filterable timeline, who's at the table (live hit points on dnd5e), a summary and a player recap you review first; a three-column next-session board; a read-only scene readiness check; Session Start (pick the scene, activate, unpause, start the log); a Who's online panel on Hub scenes; quest progress and journeys from the companion toolkit in the log; a prep list fed by the scene check; a \"Previously on…\" card for players, NPCs met, a session timer with an optional break reminder, attendance with experience or milestones, what the party gained each session, and dates on every log line (sessions that run past midnight); and optional Discord posts (off by default). Every tool can be turned off. Works with any system; extra support for dnd5e.",
-  "version": "0.8.2",
+  "version": "0.8.3",
   "authors": [
     {
       "name": "cocoomg11"
@@ -43,7 +43,7 @@
   ],
   "url": "https://github.com/cocoomg11/red-book",
   "manifest": "https://github.com/cocoomg11/red-book/releases/latest/download/module.json",
-  "download": "https://github.com/cocoomg11/red-book/releases/download/v0.8.2/module.zip",
+  "download": "https://github.com/cocoomg11/red-book/releases/download/v0.8.3/module.zip",
   "bugs": "https://github.com/cocoomg11/red-book/issues",
   "license": "LICENSE",
   "readme": "README.md"
