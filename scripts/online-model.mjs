@@ -103,6 +103,15 @@ export function savedPos(v) {
   return Number.isFinite(left) && Number.isFinite(top) ? { left, top } : null;
 }
 
+/**
+ * 0.8.2: where the quiet start banner sits once dragged: the saved { left, top } (client setting red-book.startBannerPos) kept on
+ * screen, or null for no saved spot or an unreadable one (the banner keeps its default place at the bottom centre).
+ */
+export function bannerPlace(saved, view, size) {
+  const s = savedPos(saved);
+  return s ? clampPos(s, view, size) : null;
+}
+
 /** Where the panel sits: the saved drag position when dragging is on and one is saved, else the anchor; always on screen. */
 export function placePanel({ anchor = "top-left", saved = null, drag = true } = {}, view, size, ui = {}) {
   const s = drag ? savedPos(saved) : null;

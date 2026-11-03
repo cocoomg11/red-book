@@ -355,7 +355,7 @@ export function prepPanelHTML(items = [], { checkOn = true, max = 100 } = {}) {
 
 /** 0.8.0: the quiet "Start a session?" banner (bottom of the screen, GM's browser): text, Start, and a close button. */
 export function startBannerHTML() {
-  return `<i class="fa-solid fa-book" aria-hidden="true"></i><span class="rb-banner-text">${esc(t("Prompt.quiet"))}</span>`
+  return `<span class="rb-banner-grip" title="${esc(t("Prompt.dragHint"))}"><i class="fa-solid fa-grip-vertical rb-grip-icon" aria-hidden="true"></i><i class="fa-solid fa-book" aria-hidden="true"></i><span class="rb-banner-text">${esc(t("Prompt.quiet"))}</span></span>`
     + `<button type="button" class="wc-btn wc-btn-sm wc-btn-primary" data-rb-banner="start"><i class="fa-solid fa-book" aria-hidden="true"></i> ${esc(t("Session.start"))}</button>`
     + `<button type="button" class="wc-btn wc-btn-icon wc-btn-ghost" data-rb-banner="close" data-tooltip="${esc(t("Prompt.dismiss"))}" aria-label="${esc(t("Prompt.dismiss"))}"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>`;
 }

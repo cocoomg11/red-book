@@ -69,6 +69,8 @@ export const SETTINGS = defineSettings([
   { key: "migrations", type: "object", default: { v: 1 }, hidden: true },
   { key: "onlineHudPos", type: "object", default: {}, hidden: true, client: true },
   // 0.4.0: the Hub panel folded to its header, per browser (the fold button in its header; not shown in the settings).
+  // 0.8.2: where the quiet start banner was dragged to, per browser ({} = the default spot at the bottom centre).
+  { key: "startBannerPos", type: "object", default: {}, hidden: true, client: true },
   { key: "onlineHudCollapsed", type: "bool", default: false, hidden: true, client: true },
   { key: "boardPins", type: "object", default: { v: 1, pins: [] }, hidden: true },
   // 0.5.0: the next session's date, set on the board (not GM-only: the players may see it).

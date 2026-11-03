@@ -17,6 +17,7 @@ import * as UI from "./ui.mjs";
 import { gateApi } from "./check-model.mjs";
 import { t } from "./i18n.mjs";
 import * as V from "./view.mjs";
+import { clampPos, bannerPlace } from "./online-model.mjs";
 
 const TK = TOOLKIT_ID;
 const hasProp = (o, p) => foundry.utils.hasProperty(o, p);
@@ -663,7 +664,40 @@ function askBanner() {
     });
     el.addEventListener("rb-close", () => { el.remove(); resolve(null); });
     document.body.appendChild(el);
+    wireBannerDrag(el);
   });
+}
+
+const bannerView = () => ({ width: window.innerWidth, height: window.innerHeight });
+/** Puts the banner on this browser's dragged spot (kept on screen); with none saved the stylesheet's default place stands. */
+function placeBanner(el) {
+  const b = el.getBoundingClientRect();
+  const p = bannerPlace(get("startBannerPos"), bannerView(), { width: b.width, height: b.height });
+  el.classList.toggle("placed", !!p);
+  if (p) { el.style.left = `${p.left}px`; el.style.top = `${p.top}px`; } else { el.style.left = ""; el.style.top = ""; }
+}
+
+/** 0.8.2: drag the banner by its grip (same pattern as the Who's online panel); double-click the grip to put it back. */
+function wireBannerDrag(el) {
+  const h = el.querySelector(".rb-banner-grip"); if (!h) return;
+  placeBanner(el);
+  /** @type {{ x: number, y: number, w: number, h: number } | null} */ let start = null;
+  h.addEventListener("pointerdown", ev => {
+    if (ev.button !== 0 || ev.target?.closest?.("button")) return;
+    const b = el.getBoundingClientRect(); start = { x: ev.clientX - b.left, y: ev.clientY - b.top, w: b.width, h: b.height };
+    el.classList.add("placed", "dragging"); h.setPointerCapture?.(ev.pointerId); ev.preventDefault();
+  });
+  h.addEventListener("pointermove", ev => {
+    if (!start) return;
+    const p = clampPos({ left: ev.clientX - start.x, top: ev.clientY - start.y }, bannerView(), { width: start.w, height: start.h });
+    el.style.left = `${p.left}px`; el.style.top = `${p.top}px`;
+  });
+  const end = () => {
+    if (!start) return; start = null; el.classList.remove("dragging");
+    set("startBannerPos", { left: parseFloat(el.style.left), top: parseFloat(el.style.top) }).catch(e => warn("start banner position", e));
+  };
+  h.addEventListener("pointerup", end); h.addEventListener("pointercancel", end);
+  h.addEventListener("dblclick", ev => { ev.preventDefault(); set("startBannerPos", {}).then(() => placeBanner(el)).catch(() => { }); });
 }
 
 /** The load prompt. Closed (and a late Yes ignored) when a session starts another way: panel, token button, API or another tab. */

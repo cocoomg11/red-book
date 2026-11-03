@@ -282,6 +282,7 @@
       "never": "Don't ask again in this browser",
       "neverDone": "you won't be asked again in this browser. Change it under Session log › Ask to start a session when the world loads.",
       "quiet": "No session is open.",
+      "dragHint": "Drag to move · double-click to put back",
       "dismiss": "Not now"
     }
   }

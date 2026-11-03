@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.8.2 (2026-11-02)
+
+### Changed
+- **The quiet "No session is open." banner can be moved.** Drag it by its grip and text (the Start and close buttons still just click); it stays on screen and the spot is remembered in this browser (new hidden client setting `startBannerPos`). Double-click the grip to put it back at the bottom centre. The solid background from 0.8.1 is unchanged. The new setting is in the Wanderer's Satchel skip list and in Remove Red Book data's settings reset.
+
+### Untested in Foundry
+- [ ] Drag the banner to another corner and release; reload with no session open: it comes back in the same spot.
+- [ ] Clicking *Start session* and the close button still works (no drag starts from them); double-click the grip returns it to the bottom centre.
+- [ ] Shrink the browser window: a banner saved near an edge is pulled back on screen.
+- [ ] Both themes: the dragged banner stays opaque and readable.
+
 ## 0.8.1 (2026-11-02)
 
 ### Fixed
