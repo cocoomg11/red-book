@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.1 (2026-11-02)
+
+### Fixed
+- **The "Start a session?" banner was almost see-through in the light theme.** It now has a solid background in both the light and dark themes, with dark text on light and light text on dark.
+
+### Untested in Foundry
+- The banner at the bottom of the screen in the light theme and in the dark theme: solid background, readable text and buttons, nothing showing through from the hotbar behind it.
+
 ## 0.8.0 (2026-11-01)
 
 Small fixes and comforts from a live run-through. No data is rewritten; nothing new is stored in the world.

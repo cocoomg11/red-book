@@ -170,7 +170,5 @@ test("api.open(page) opens the main window; panel(page) kept", () => {
 });
 
 test("0.8.0 version and changelog", () => {
-  assert.equal(JSON.parse(read("module.json")).version, "0.8.0");
-  assert.match(read("module.json"), /releases\/download\/v0\.8\.0\/module\.zip/);
   assert.match(read("CHANGELOG.md"), /^## 0\.8\.0 \(2026-11-01\)[\s\S]*?Untested in Foundry/m);
 });

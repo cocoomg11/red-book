@@ -148,5 +148,8 @@ body.theme-light .rb-online-hud { background: rgba(247, 243, 232, .96); box-shad
 .rb-app .rb-milestone-row input { width: 100%; }
 
 /* 0.8.0: the quiet "Start a session?" banner (GM's browser, bottom centre above the hotbar) */
-.rb-start-banner { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); z-index: 100; display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 12px; max-width: calc(100vw - 32px); border: 1px solid var(--wc-line-strong, rgba(128, 128, 128, .5)); border-radius: var(--wc-radius, 6px); background: var(--wc-surface, #1d1d1d); color: var(--wc-text, inherit); box-shadow: 0 4px 16px rgba(0, 0, 0, .35); font-size: var(--font-size-13, 0.8125rem); }
+.rb-start-banner { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); z-index: 100; display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 12px; max-width: calc(100vw - 32px); border: 1px solid var(--wc-line-strong, rgba(128, 128, 128, .5)); border-radius: var(--wc-radius, 6px); background: #1d1b18; color: #e8dcc0; box-shadow: 0 4px 16px rgba(0, 0, 0, .35); font-size: var(--font-size-13, 0.8125rem); }
+/* 0.8.1: opaque in both themes (core's --wc-surface is a ~4% tint, meant for use inside a window, so it was see-through over the hotbar) */
+body.theme-light .rb-start-banner { background: #f7f3e8; color: #191813; box-shadow: 0 4px 16px rgba(0, 0, 0, .25); }
+body.theme-light .rb-start-banner .rb-banner-text { color: #191813; }
 .rb-start-banner .rb-banner-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
