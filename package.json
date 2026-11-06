@@ -1,6 +1,6 @@
 {
   "name": "red-book",
-  "version": "0.8.3",
+  "version": "0.8.4",
   "private": true,
   "type": "module",
   "description": "Tests and dev checks for the Red Book Foundry VTT module (the module itself needs no install step).",

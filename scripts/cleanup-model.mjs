@@ -4,6 +4,7 @@
  * folders, recognised by their flags) and `flags.red-book` on anything else are touched.
  */
 import { dryRun as coreDryRun, hasFlags } from "../vendor/wanderers-core/index.mjs";
+import { normalizeMigrations, MIGRATIONS_VERSION } from "./migrate-model.mjs";
 
 /** @type {[string, string, boolean][]} */
 export const CATEGORIES = [
@@ -21,6 +22,19 @@ export const CATEGORIES = [
  * (localStorage, not a setting) are cleared with it: see cleanup.mjs.
  */
 export const SETTING_SCOPES = ["world", "client"];
+
+/**
+ * 0.8.4: settings the reset leaves alone. `migrations` holds the "toolkit carry-over done" mark; resetting it made the next load
+ * import the old toolkit settings again (see `keepMigrations`).
+ */
+export const KEEP_SETTINGS = ["migrations"];
+/** The journal id inside an embedded-document uuid (`JournalEntry.<id>.JournalEntryPage.<id>`), or null. */
+export const parentJournalId = uuid => /^JournalEntry\.([^.]+)\./.exec(String(uuid ?? ""))?.[1] ?? null;
+/**
+ * What `migrations` holds after "Reset settings": the carry-over mark is kept (or set, when it was never run): the GM asked for the
+ * data to go, so the next load must not import the toolkit's settings back.
+ */
+export const keepMigrations = (raw, now = Date.now()) => ({ ...normalizeMigrations(raw), v: MIGRATIONS_VERSION, toolkit: normalizeMigrations(raw).toolkit ?? now });
 
 const flagsOf = d => d?.flags?.["red-book"];
 /**
@@ -53,9 +67,12 @@ export function plan(world = {}) {
     else if (k === "store") p.store.push({ id: j.id, name: j.name });
     else if (flagsOf(j) && Object.keys(flagsOf(j)).length) p.flags.push({ uuid: `JournalEntry.${j.id}`, name: j.name });
   }
-  for (const d of world.docs ?? []) if (hasFlags(d, "red-book")) p.flags.push({ uuid: d.uuid, name: d.name });
+  // 0.8.4: a page of a session / recap / report / store journal goes with its journal (deleting the journal removes its flags), so it is
+  // not counted (or flag-cleared) separately: the dry run and the "removed" notice then agree.
+  const owned = new Set(p.sessions.concat(p.recaps, p.reports, p.store).map(j => j.id));
+  for (const d of world.docs ?? []) if (hasFlags(d, "red-book") && !owned.has(parentJournalId(d.uuid))) p.flags.push({ uuid: d.uuid, name: d.name });
   for (const f of world.folders ?? []) if (flagsOf(f)?.folder) p.folders.push({ id: f.id, name: f.name });
-  for (const s of world.settings ?? []) if (s.changed) p.settings.push({ key: s.key, name: s.key });
+  for (const s of world.settings ?? []) if (s.changed && !KEEP_SETTINGS.includes(s.key)) p.settings.push({ key: s.key, name: s.key });
   return p;
 }
 

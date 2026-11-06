@@ -89,7 +89,9 @@ test("pin move: once, merged, setting cleared", () => {
   const merged = St.migratePins({ v: 1, pins: { pins: [{ uuid: "Actor.a" }, { uuid: "Item.i" }] } }, setting, 3);
   assert.deepEqual(merged.store.pins.pins.map(p => p.uuid), ["Actor.a", "Item.i", "Scene.s"]); assert.equal(merged.moved, 1);
   const none = St.migratePins(null, { v: 1, pins: [] }, 4);
-  assert.equal(none.clearSetting, false); assert.equal(none.store.migrated.boardPins, 4);
+  assert.equal(none.clearSetting, false); assert.equal(none.store, null, "0.8.4: nothing to move and no journal: nothing is written (lazy create)");
+  const marked = St.migratePins({ v: 1 }, { v: 1, pins: [] }, 5);
+  assert.equal(marked.store.migrated.boardPins, 5, "an existing store still gets the mark");
 });
 test("cleanup finds the GM-only store journal", () => {
   const p = K.plan({ journals: [{ id: "d", name: St.STORE_NAME, flags: { "red-book": { store: { v: 1 } } } }] });

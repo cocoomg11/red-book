@@ -6,6 +6,7 @@ import { ID, esc } from "./const.mjs";
 import * as M from "./cleanup-model.mjs";
 import * as UI from "./ui.mjs";
 import * as Store from "./store.mjs";
+import { get, set } from "./core.mjs";
 import { gateApi, savedKey } from "./check-model.mjs";
 import { confirmed, changedSettings } from "../vendor/wanderers-core/index.mjs";
 import { flaggedDocuments, unsetFlags, resetSettings, settingValues, RememberedWindow } from "../vendor/wanderers-core/foundry/index.mjs";
@@ -38,6 +39,8 @@ export async function remove(pick = {}) {
   if (folders.length) { try { await Folder.deleteDocuments(folders.map(f => f.id)); done.folders = folders.length; } catch (e) { console.warn(`${ID} | remove folders`, e); } }
   if (pick.settings) {
     done.settings = await resetSettings(ID, p.settings.map(s => s.key));
+    // 0.8.4: keep (or set) the toolkit carry-over mark so the next load doesn't import the toolkit's settings again.
+    try { await set("migrations", M.keepMigrations(get("migrations"))); } catch (e) { console.warn(`${ID} | keeping the carry-over mark`, e); }
     // 0.8.0: this browser's saved scene-check results (localStorage, not a setting) go with this browser's settings.
     try { globalThis.localStorage?.removeItem(savedKey(game.world?.id)); } catch { }
   }
@@ -66,7 +69,7 @@ export class CleanupApp extends RememberedWindow(foundry.applications.api.Applic
       if (!Object.values(pick).some(Boolean)) return ui.notifications.info("Red Book: nothing ticked.");
       const done = await remove(pick); await this.close();
       if (!done) return;
-      ui.notifications.info(`Red Book data removed: ${Object.entries(done).map(([k, n]) => `${k} ${n}`).join(", ") || "nothing"}.`);
+      ui.notifications.info(`Red Book data removed: ${Object.entries(done).map(([k, n]) => `${k} ${n}`).join(", ") || "nothing"}.${done.store ? " The GM-only data journal is made again only when a pin or prep item is next saved." : ""}`);
       if (pick.settings) foundry.applications?.settings?.SettingsConfig?.reloadConfirm?.({ world: true });
     };
   }

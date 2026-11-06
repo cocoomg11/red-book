@@ -15,9 +15,9 @@ test("start banner has an opaque background in both themes", () => {
 
 test("0.8.1 version and changelog", () => {
   const read = f => readFileSync(new URL("../" + f, import.meta.url), "utf8");
-  assert.equal(JSON.parse(read("module.json")).version, "0.8.3");
-  assert.equal(JSON.parse(read("package.json")).version, "0.8.3");
-  assert.match(read("module.json"), /releases\/download\/v0\.8\.3\/module\.zip/);
+  assert.equal(JSON.parse(read("module.json")).version, "0.8.4");
+  assert.equal(JSON.parse(read("package.json")).version, "0.8.4");
+  assert.match(read("module.json"), /releases\/download\/v0\.8\.4\/module\.zip/);
   assert.match(read("CHANGELOG.md"), /^## 0\.8\.1 \(2026-11-02\)[\s\S]*?Untested in Foundry/m);
 });
 

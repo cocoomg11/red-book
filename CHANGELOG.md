@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.8.4 (2026-11-06)
+
+Small fixes from a destructive live test of *Remove Red Book data*.
+
+### Fixed
+- **The "removed" notice said "flags 2" while the dry run said 13.** The dry run counted the Red Book flags on the pages of session, recap, report and data journals, but those journals were deleted in the same run, so only the flags on surviving documents were cleared. Pages of journals Red Book deletes are no longer counted as flags (they go with their journal), so the dry run and the notice agree.
+- **Red Book made a new empty data journal on the next reload after "Remove data".** The one-time board-pin move wrote its done-mark into a new journal even when there was nothing to move. It now writes nothing when there is no journal and no old pins: the GM-only data journal is made lazily, with the first pin or prep item you save. The removal notice says so.
+- **Resetting settings re-imported the toolkit's old settings.** "Reset Red Book's settings" also reset the `migrations` record, which is what stops the one-time carry-over from the toolkit, so the next load copied the toolkit's Session Start / Who's online settings and Hub scene flags back. The reset now leaves that mark in place (and sets it when the carry-over never ran), and the `migrations` record is no longer counted in the settings dry run.
+
+### Untested in Foundry
+- [ ] Make a session with a Timeline page and a recap, then Remove data with everything ticked: the dry-run flag count equals the number in the notice.
+- [ ] After Remove data (store ticked), reload with Red Book enabled: no new "Red Book data (GM only)" journal appears. Pin something on the board: the journal is made then.
+- [ ] With the toolkit's old Who's online settings still in the world: Remove data with settings ticked, reload: those settings are not copied back (Who's online keeps its defaults).
+- [ ] A fresh world with the toolkit's old settings still carries them over once on first load (unchanged).
+
 ## 0.8.3 (2026-11-02)
 
 ### Fixed

@@ -35,7 +35,7 @@ test("cleanup plan: only our documents and flags", () => {
   };
   const p = K.plan(world);
   assert.deepEqual(p.sessions.map(x => x.id), ["s"]); assert.deepEqual(p.recaps.map(x => x.id), ["r"]); assert.deepEqual(p.reports.map(x => x.id), ["c"]);
-  assert.deepEqual(p.flags.map(x => x.uuid), ["JournalEntry.z", "JournalEntry.s.JournalEntryPage.p"]);
+  assert.deepEqual(p.flags.map(x => x.uuid), ["JournalEntry.z"], "0.8.4: the page of deleted session s goes with it");
   assert.deepEqual(p.folders.map(x => x.id), ["f1"]); assert.deepEqual(p.settings.map(x => x.key), ["boardPins"]);
   assert.deepEqual(K.emptyFolders(p, { sessions: true }, { f1: ["s"] }).map(f => f.id), ["f1"]);
   assert.deepEqual(K.emptyFolders(p, { sessions: true }, { f1: ["s", "x"] }), []);

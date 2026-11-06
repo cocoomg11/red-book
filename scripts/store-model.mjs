@@ -44,6 +44,8 @@ export function migratePins(rawStore, settingValue, now = Date.now()) {
   const store = normalizeStore(rawStore);
   const old = normalizePins(settingValue).pins;
   if (store.migrated.boardPins) return { store: null, clearSetting: old.length > 0, moved: 0 };
+  // 0.8.4: nothing to move and no store journal yet: write nothing (the journal is made lazily, with the first pin or prep item).
+  if (!old.length && (rawStore === null || rawStore === undefined)) return { store: null, clearSetting: false, moved: 0 };
   const have = new Set(store.pins.pins.map(p => p.uuid));
   const add = old.filter(p => !have.has(p.uuid));
   const pins = normalizePins({ pins: [...store.pins.pins, ...add] });
