@@ -50,7 +50,6 @@ test("0.8.4 pin move: no store and no old pins writes nothing (lazy create)", ()
   assert.ok(St.migratePins(null, { v: 1, pins: [{ uuid: "Actor.a", name: "A" }] }, 1).store, "old pins still move");
 });
 
-test("0.8.4 version", () => {
-  assert.equal(JSON.parse(read("module.json")).version, "0.8.4");
+test("0.8.4 changelog", () => {
   assert.match(read("CHANGELOG.md"), /^## 0\.8\.4 \(2026-11-06\)[\s\S]*?Untested in Foundry/m);
 });

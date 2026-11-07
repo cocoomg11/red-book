@@ -1,8 +1,16 @@
 # Changelog
 
-## Unreleased
+## 0.8.5 (2026-11-07)
 
-- Under the hood: the Release workflow now has a read-only build job and a separate upload job (the only one that can write to the release), with top-level `permissions: contents: read` and every action pinned by commit SHA. Same tag check, version/URL setting and zip contents as before. No change to the module itself.
+### Fixed
+- **Players' browsers no longer run the session log's 5-second inventory timer.** It is started only on GM clients now. Recording is unchanged: the timer still flushes only on the GM client that records (the leader), and a leader change between GM tabs still picks it up.
+
+### Under the hood
+- The Release workflow now has a read-only build job and a separate upload job (the only one that can write to the release), with top-level `permissions: contents: read` and every action pinned by commit SHA. Same tag check, version/URL setting and zip contents as before.
+
+### Untested in Foundry
+- [ ] As a player, reload: no 5 s timer from Red Book (e.g. Performance panel); as the GM, start a session, move items between characters: inventory lines still appear in the log after the coalesce delay.
+- [ ] Two GM tabs: close the recording tab; the other becomes leader and inventory changes are still logged.
 
 ## 0.8.4 (2026-11-06)
 

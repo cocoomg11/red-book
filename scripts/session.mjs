@@ -606,7 +606,9 @@ export function ready() {
     scanSoon();
   });
   L.onBye(() => { if (R.dirty) flush(); });
-  setInterval(() => { if (recording()) flushInventory(); }, 5000);
+  // 0.8.5: only GM clients run the inventory timer (only a GM can be the leader, and `recording()` checks the leader on each tick,
+  // so a leader change between GM tabs still works); players' clients start no timer.
+  if (game.user?.isGM) setInterval(() => { if (recording()) flushInventory(); }, 5000);
 }
 
 /**
