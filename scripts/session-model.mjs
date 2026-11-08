@@ -36,13 +36,14 @@ export const TYPES = {
   objective: { label: "Objectives", icon: "fa-list-check", group: "toolkit" },
   travel: { label: "Travel and flights", icon: "fa-route", group: "toolkit" },
   lootRoll: { label: "Loot rolls", icon: "fa-dice", group: "toolkit" },
+  renown: { label: "Renown", icon: "fa-handshake", group: "toolkit" },
   note: { label: "Notes", icon: "fa-pen" }
 };
 /** Event groups the GM can turn off (setting "logTypes" holds the turned-off ones). */
 export const GROUPS = {
   scene: "Scenes activated", combat: "Combats (start, end, combatants)", downs: "Characters at 0 HP and creatures killed",
   rest: "Rests (dnd5e)", loot: "Items and coin on player characters and the party actor", time: "World time advanced",
-  journal: "Journals shown to players", npc: "NPCs met", level: "Level-ups", toolkit: "Quests, travel, flights and loot rolls (from the toolkit)"
+  journal: "Journals shown to players", npc: "NPCs met", level: "Level-ups", toolkit: "Quests, travel, flights, loot rolls and renown (from the toolkit)"
 };
 export const groupOf = type => TYPES[type]?.group ?? type;
 /** Whether events of `type` are logged, given the list of turned-off groups. Notes and session lines always are. */
@@ -393,7 +394,7 @@ export function diffQuest(before, after) {
 
 // ---------------------------------------------------------------- toolkit hooks (0.5.0): quest changes and journeys
 /** The companion toolkit's hooks Red Book listens to (0.5.0; see README, Integrations). Both carry ids and display names only. */
-export const TOOLKIT_HOOKS = Object.freeze({ questUpdated: "wayfarersToolkit.questUpdated", journey: "wayfarersToolkit.journey" });
+export const TOOLKIT_HOOKS = Object.freeze({ questUpdated: "wayfarersToolkit.questUpdated", journey: "wayfarersToolkit.journey", renownChanged: "wayfarers-toolkit.renownChanged" });
 /** The `change` values of the toolkit's `wayfarersToolkit.questUpdated` hook. */
 export const QUEST_CHANGES = Object.freeze(["started", "completed", "failed", "objective", "updated", "assigned"]);
 const DOC_ID = /^[A-Za-z0-9]{16}$/;
@@ -529,6 +530,95 @@ export function journeyEvent(j) {
   return { type: "travel", text: `${kind === "flight" ? "Flight" : "Travel"}: ${parts.join(", ")}.`, data: { kind, via: "hook", fromId: j.fromId, toId: j.toId, partyId: j.partyId, hours: j.hours, cost: j.cost } };
 }
 
+// ---------------------------------------------------------------- toolkit renown (0.9.0)
+/** A toolkit faction id (its renown-model ID_RE). */
+const FACTION_ID = /^[A-Za-z0-9]{1,24}$/;
+/** Renown totals are 0..9999 in the toolkit; a little room either way, clipped. */
+const RENOWN_MAX = 100000;
+const renownInt = (v, min, max) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : 0; };
+/** Rapid changes for one character and faction are merged when they come within this many ms of each other (the quiet time). */
+export const RENOWN_QUIET = 5000;
+/** …but a burst is logged at most this many ms after it began. */
+export const RENOWN_BURST_MAX = 30000;
+
+/**
+ * Reads the toolkit's `wayfarers-toolkit.renownChanged` payload `{ actorId, factionId, before, after, delta, tierBefore, tierAfter }`
+ * (ids and numbers only; toolkit 2.2 `hookPayload`). Other fields are ignored; numbers are whole and clipped (totals ≥ 0, tiers ≥ −1).
+ * null when an id is malformed or the payload isn't an object.
+ * @param {any} p
+ * @returns {{ actorId: string, factionId: string, before: number, after: number, delta: number, tierBefore: number, tierAfter: number } | null}
+ */
+export function readRenownHook(p) {
+  if (!p || typeof p !== "object") return null;
+  const actorId = String(p.actorId ?? ""), factionId = String(p.factionId ?? "");
+  if (!DOC_ID.test(actorId) || !FACTION_ID.test(factionId)) return null;
+  return {
+    actorId, factionId,
+    before: renownInt(p.before, 0, RENOWN_MAX), after: renownInt(p.after, 0, RENOWN_MAX), delta: renownInt(p.delta, -RENOWN_MAX, RENOWN_MAX),
+    tierBefore: renownInt(p.tierBefore, -1, 100), tierAfter: renownInt(p.tierAfter, -1, 100)
+  };
+}
+/** The key rapid renown changes are merged by. */
+export const renownKey = p => (p ? `${p.actorId}:${p.factionId}` : "");
+/** Two read payloads for the same character and faction as one: the first's `before`, the last's `after`, the deltas added. */
+export function mergeRenown(prev, next) {
+  if (!prev) return next ? { ...next } : null;
+  if (!next) return { ...prev };
+  return { ...next, before: prev.before, tierBefore: prev.tierBefore, delta: renownInt(prev.delta + next.delta, -RENOWN_MAX, RENOWN_MAX) };
+}
+/**
+ * The timeline event for one (merged) renown change. `names`: what the GM client resolved: `actor` the character's name, `faction`
+ * the faction's name, `hidden` (a hidden faction, or one that couldn't be read: the line is GM only), `tier` the name of the tier
+ * reached (or ""), `tierBefore` the name of the tier before. null when nothing changed.
+ * @param {ReturnType<typeof readRenownHook>} p
+ * @param {{ actor?: string, faction?: string, hidden?: boolean, tier?: string, tierBefore?: string }} [names]
+ */
+export function renownEvent(p, names = {}) {
+  if (!p) return null;
+  const net = p.after - p.before;
+  if (!net && !p.delta && p.tierAfter === p.tierBefore) return null;
+  const who = clipName(names.actor) || "A character", faction = clipName(names.faction) || "a faction";
+  const tier = clipName(names.tier), tierWas = clipName(names.tierBefore);
+  const now = `now ${p.after}${tier ? `, ${tier}` : ""}`;
+  let text = net > 0 ? `${who} gained ${plural(net, "renown", "renown")} with ${faction} (${now}).`
+    : net < 0 ? `${who} lost ${plural(-net, "renown", "renown")} with ${faction} (${now}).`
+      : `${who}'s renown with ${faction} changed (${now}).`;
+  if (p.tierAfter > p.tierBefore && tier) text += ` Reached ${tier}!`;
+  else if (p.tierAfter < p.tierBefore) text += tier ? ` Dropped to ${tier}.` : tierWas ? ` No longer ${tierWas}.` : "";
+  return {
+    type: "renown", text,
+    data: { actor: p.actorId, faction: p.factionId, actorName: who, factionName: faction, tier, before: p.before, after: p.after, net, delta: p.delta, tierBefore: p.tierBefore, tierAfter: p.tierAfter },
+    private: !!names.hidden || !clipName(names.faction)
+  };
+}
+/** At most this many rows in the summary's Renown list. */
+export const RENOWN_ROWS_MAX = 100;
+/**
+ * The summary's Renown list: the net change per character per faction over the session's renown events, in first-seen order.
+ * `private` when any of its lines was GM only (a hidden faction). Rows that net to 0 are kept when the tier changed.
+ * @param {any[]} events
+ */
+export function renownTotals(events = []) {
+  /** @type {Map<string, any>} */ const rows = new Map();
+  for (const e of Array.isArray(events) ? events : []) {
+    if (e?.type !== "renown" || !e.data) continue;
+    const d = e.data; const k = `${d.actor}:${d.faction}`;
+    const r = rows.get(k) ?? { actor: String(d.actor ?? ""), faction: String(d.faction ?? ""), actorName: String(d.actorName ?? ""), factionName: String(d.factionName ?? ""), net: 0, before: Number(d.before) || 0, tierBefore: Number(d.tierBefore ?? -1), private: false };
+    r.net += (Number(d.after) || 0) - (Number(d.before) || 0);
+    r.after = Number(d.after) || 0; r.tier = String(d.tier ?? ""); r.tierAfter = Number(d.tierAfter ?? -1);
+    r.actorName = String(d.actorName ?? r.actorName); r.factionName = String(d.factionName ?? r.factionName);
+    r.private = r.private || !!e.private;
+    rows.set(k, r);
+  }
+  return [...rows.values()].filter(r => r.net || r.tierAfter !== r.tierBefore).slice(0, RENOWN_ROWS_MAX)
+    .map(r => ({ text: renownRowText(r), private: r.private, actor: r.actor, faction: r.faction, net: r.net, after: r.after }));
+}
+/** "Bryn: +3 with The Guild (now 13, Trusted)". */
+export function renownRowText(r) {
+  const sign = r.net > 0 ? `+${r.net}` : String(r.net);
+  return `${r.actorName || "A character"}: ${sign} with ${r.factionName || "a faction"} (now ${r.after}${r.tier ? `, ${r.tier}` : ""})`;
+}
+
 /** New lines appended to the toolkit's Travel Log page, classed as flight, travel or other. The session-start line is skipped. */
 export function travelLogAdditions(before = "", after = "") {
   const a = String(before ?? ""), b = String(after ?? "");
@@ -554,17 +644,19 @@ const NOTABLE = new Set(["death", "level", "quest", "combatStart"]);
 const QUESTS = new Set(["quest", "objective"]);
 /**
  * Counts by type, notable moments (kills, level-ups, quests, combats), quest progress (0.5.0: quests and objectives, GM-only ones
- * marked private) and open threads.
+ * marked private), renown (0.9.0: net per character and faction, hidden factions marked private) and open threads.
  */
 export function summarize(session) {
   const counts = {};
-  for (const e of session.events) if (e.type !== "session") counts[e.type] = (counts[e.type] ?? 0) + 1;
+  // 0.9.0: GM-only renown lines (hidden factions) aren't counted: the counts go into the recap and the Discord post.
+  for (const e of session.events) if (e.type !== "session" && !(e.type === "renown" && e.private)) counts[e.type] = (counts[e.type] ?? 0) + 1;
   const notable = session.events.filter(e => NOTABLE.has(e.type) && !e.private).slice(0, 20).map(e => e.text);
   const threads = session.events.filter(e => e.type === "note" && e.thread).map(e => ({ id: e.id, text: e.text, private: e.private }));
   const quests = session.events.filter(e => QUESTS.has(e.type)).slice(0, 50).map(e => ({ text: e.text, private: e.private }));
   const real = session.endedAt && session.startedAt ? session.endedAt - session.startedAt : 0;
   const world = session.endWorld - session.startWorld;
-  return { counts, notable, quests, threads, realMs: Math.max(0, real), worldSeconds: world, dropped: session.dropped ?? 0 };
+  const renown = renownTotals(session.events);
+  return { counts, notable, quests, renown, threads, realMs: Math.max(0, real), worldSeconds: world, dropped: session.dropped ?? 0 };
 }
 
 export function summaryHTML(sum) {
@@ -574,6 +666,8 @@ export function summaryHTML(sum) {
   const quests = Array.isArray(sum.quests) ? sum.quests : [];
   const pubQuests = quests.filter(q => !q.private), privQuests = quests.filter(q => q.private);
   // Quest lines have their own list (0.5.0); older summaries without one keep them under Notable moments.
+  const renown = Array.isArray(sum.renown) ? sum.renown : [];
+  const pubRenown = renown.filter(r => r && !r.private), privRenown = renown.filter(r => r && r.private);
   const questText = new Set(quests.map(q => q.text));
   const notable = (sum.notable ?? []).filter(x => !questText.has(x));
   return [
@@ -583,6 +677,8 @@ export function summaryHTML(sum) {
     notable.length ? `<h3>Notable moments</h3><ul>${notable.map(t => `<li>${esc(t)}</li>`).join("")}</ul>` : "",
     pubQuests.length ? `<h3>Quests</h3><ul>${pubQuests.map(q => `<li>${esc(q.text)}</li>`).join("")}</ul>` : "",
     privQuests.length ? `<section class="secret" id="secret-rb-quests"><p><strong>GM-only quest progress</strong></p><ul>${privQuests.map(q => `<li>${esc(q.text)}</li>`).join("")}</ul></section>` : "",
+    pubRenown.length ? `<h3>Renown</h3><ul>${pubRenown.map(r => `<li>${esc(r.text)}</li>`).join("")}</ul>` : "",
+    privRenown.length ? `<section class="secret" id="secret-rb-renown"><p><strong>GM-only renown (hidden factions)</strong></p><ul>${privRenown.map(r => `<li>${esc(r.text)}</li>`).join("")}</ul></section>` : "",
     pubThreads.length ? `<h3>Open threads</h3><ul>${pubThreads.map(t => `<li>${esc(t.text)}</li>`).join("")}</ul>` : "",
     privThreads.length ? `<section class="secret" id="secret-rb-threads"><p><strong>Private open threads</strong></p><ul>${privThreads.map(t => `<li>${esc(t.text)}</li>`).join("")}</ul></section>` : "",
     sum.dropped ? `<p><em>${plural(sum.dropped, "older event")} dropped to keep the log under its size cap.</em></p>` : "",
@@ -852,6 +948,7 @@ export function promptAnswer(v) {
  * event from the journal (api.session.get(session).events).
  */
 export function eventHookPayload(session, ev) {
-  const type = ev?.type === "note" ? "note" : String(ev?.type ?? "note");
+  // 0.9.0: a GM-only renown line (a hidden faction) is reported as a note, so players' clients can't tell one happened.
+  const type = ev?.type === "note" || (ev?.type === "renown" && ev?.private) ? "note" : String(ev?.type ?? "note");
   return { session: String(session ?? ""), event: { id: String(ev?.id ?? ""), type, t: Number(ev?.t) || 0, wt: Number(ev?.wt) || 0 } };
 }

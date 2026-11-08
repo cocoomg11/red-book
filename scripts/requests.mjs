@@ -39,6 +39,19 @@ export const REQUESTS = defineRequests({
     from: "gm", maxBytes: 2048
   },
   /**
+   * 0.9.0: the toolkit's renownChanged hook heard on another GM tab, relayed to the recording tab (ids and numbers only, like the
+   * hook); session-model readRenownHook() reads them again.
+   */
+  renown: {
+    fields: {
+      actorId: { type: "id" }, factionId: { type: "string", min: 1, max: 24, pattern: /^[A-Za-z0-9]+$/ },
+      before: { type: "number", int: true, min: 0, max: 100000 }, after: { type: "number", int: true, min: 0, max: 100000 },
+      delta: { type: "number", int: true, min: -100000, max: 100000 },
+      tierBefore: { type: "number", int: true, min: -1, max: 100 }, tierAfter: { type: "number", int: true, min: -1, max: 100 }
+    },
+    from: "gm", maxBytes: 512
+  },
+  /**
    * 0.6.0: a GM's edit to a session (any session, open or ended), applied on the recording tab by session-model applyEdit().
    * unmeet { key }; attend { userId, present, name?, characterId?, characterName? }; award { actorId, name?, n }; milestone { text }.
    */

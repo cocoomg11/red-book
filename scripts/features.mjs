@@ -22,7 +22,9 @@ export const FEATURE_LIST = [
   { id: "sessionTimer", label: "Session timer and break reminder", hint: "How long the session has run, on the Session page and its live banner. Optionally (off by default) a GM-only reminder every so many minutes to take a break.", needs: ["sessionLog"] },
   { id: "attendance", label: "Attendance and experience", hint: "Who was at the table each session (filled in from who's online; you can change it) and an experience or milestone tracker per session, with totals per character on Past sessions. Players see milestone text in the recap, never experience numbers.", needs: ["sessionLog"] },
   { id: "gained", label: "Gained this session", hint: "A Gained this session block in the summary and the recap: the party's coin (gold, silver, copper) from the companion toolkit's coin log, or from the log's own item and coin lines without it, and the reward items of quests completed this session.", needs: ["sessionLog"] },
-  { id: "discord", label: "Discord posts", default: false, hint: "Off by default. Post the session recap when a session ends and the next session's date to a Discord channel through a webhook you set up. Only a GM's browser posts. Players can read world settings from the browser console, so the webhook URL is on the honor system." }
+  { id: "discord", label: "Discord posts", default: false, hint: "Off by default. Post the session recap when a session ends and the next session's date to a Discord channel through a webhook you set up. Only a GM's browser posts. Players can read world settings from the browser console, so the webhook URL is on the honor system." },
+  // 0.9.0
+  { id: "renownEvents", label: "Renown in the log", hint: "While a session is open, renown a character gains or loses with a faction (from the companion toolkit) becomes a Renown line on the timeline, with the tier reached, and the summary gets a Renown list (net change per character and faction). Quick changes in a row are merged into one line. Hidden factions are GM only: never in the recap or a Discord post.", needs: ["sessionLog"] }
 ];
 
 export const FEATURES = defineFeatures(FEATURE_LIST);

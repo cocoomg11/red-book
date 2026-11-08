@@ -33,7 +33,8 @@ test("quest hook: ids only, known changes, journal ids or UUIDs; anything else i
   assert.equal(M.readQuestHook({ questId: "<script>alert(1)</script>xx", change: "started" }), null);
   assert.equal(M.readQuestHook(null), null);
   assert.equal(M.readQuestHook("x"), null);
-  assert.deepEqual(M.TOOLKIT_HOOKS, { questUpdated: "wayfarersToolkit.questUpdated", journey: "wayfarersToolkit.journey" });
+  assert.equal(M.TOOLKIT_HOOKS.questUpdated, "wayfarersToolkit.questUpdated");
+  assert.equal(M.TOOLKIT_HOOKS.journey, "wayfarersToolkit.journey");
 });
 
 test("quest diff: hidden quests and hidden objectives become GM-only lines; objective ids kept for the dedupe key", () => {

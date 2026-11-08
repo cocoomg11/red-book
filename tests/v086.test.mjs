@@ -20,9 +20,6 @@ test("0.8.6: windows take core's revision class from UI_CLASSES; nothing writes 
   }
 });
 
-test("0.8.6 version", () => {
-  assert.equal(JSON.parse(read("module.json")).version, "0.8.6");
-  assert.equal(JSON.parse(read("package.json")).version, "0.8.6");
-  assert.match(read("module.json"), /releases\/download\/v0\.8\.6\/module\.zip/);
+test("0.8.6 changelog section kept (shipped with 0.9.0)", () => {
   assert.match(read("CHANGELOG.md"), /^## 0\.8\.6 \(2026-11-08\)[\s\S]*?Untested in Foundry/m);
 });

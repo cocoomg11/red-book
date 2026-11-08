@@ -27,7 +27,9 @@ const getProp = (o, p) => foundry.utils.getProperty(o, p);
 /** @type {any} */
 const R = { entry: null, data: null, dirty: false, timer: null, flushing: null, downed: new Set(), base: new Map(), levels: new Map(), quests: new Map(), travel: null, rolls: new Set(), combats: new Set(), coalescer: null, coalesceTimer: null, time: new M.TimeTotal(), npcTimer: null,
   // 0.5.0: quest lines logged lately (journal flag and toolkit hook report the same change), journeys (hook vs Travel Log line).
-  questsSeen: new M.Recent({ window: 15000 }), journeys: new M.Merge({ window: 15000, delay: 2500 }) };
+  questsSeen: new M.Recent({ window: 15000 }), journeys: new M.Merge({ window: 15000, delay: 2500 }),
+  // 0.9.0: renown changes waiting to be merged (key actorId:factionId → merged payload) and when each burst is due.
+  renown: new Map(), renownBursts: null, renownTimer: null };
 
 // ---------------------------------------------------------------- reading
 export const isSessionEntry = j => !!j?.flags?.[ID]?.session;
@@ -216,6 +218,7 @@ async function doEnd(by) {
   if (!R.data?.open) { const j = openEntry(); if (j) load(j); }
   if (!R.data?.open) { ui.notifications.info("Red Book: no session is open."); return null; }
   await flushInventory(true);
+  flushRenown(true);
   const t = R.time.take(1); if (t) record("time", `World time advanced ${M.durationText(t.seconds)}.`, { data: t });
   record("session", `Session ended${by ? ` by ${by.name}` : ""}.`);
   const ended = { ...R.data, open: false, endedAt: Date.now(), endWorld: game.time.worldTime };
@@ -237,10 +240,11 @@ function load(entry) {
   R.coalescer = new M.Coalescer({ quiet: (Number(get("coalesceSeconds")) || 8) * 1000 });
   R.time.clear(); R.rolls = new Set(R.data.events.map(e => e.data?.msg).filter(Boolean)); R.combats.clear();
   R.questsSeen = new M.Recent({ window: 15000 }); R.journeys = new M.Merge({ window: 15000, delay: 2500 });
+  R.renown = new Map(); R.renownBursts = new M.Coalescer({ quiet: M.RENOWN_QUIET, max: M.RENOWN_BURST_MAX }); clearTimeout(R.renownTimer);
   baseline();
   log("session loaded on the leader", entry.name);
 }
-function unload() { R.entry = null; R.data = null; R.coalescer = null; clearTimeout(R.coalesceTimer); clearTimeout(R.npcTimer); }
+function unload() { R.entry = null; R.data = null; R.coalescer = null; clearTimeout(R.coalesceTimer); clearTimeout(R.npcTimer); clearTimeout(R.renownTimer); R.renown = new Map(); R.renownBursts = null; }
 
 // ---------------------------------------------------------------- 0.6.0: attendance, edits, gained, the page's extra blocks
 /** Plain users for attendance (connected players and their characters). */
@@ -509,11 +513,66 @@ function travelLine(e) {
   setTimeout(() => { if (recording() && R.journeys.settle(kind, at)) record(e.type, e.text, { data: e.data }); }, R.journeys.delay);
 }
 
+// ---------------------------------------------------------------- 0.9.0: the toolkit's renown changes
+/**
+ * The toolkit's `wayfarers-toolkit.renownChanged` hook (ids and numbers; fired on the GM client that saved the change, only with its
+ * Hooks for other modules on). The leader merges quick repeats for one character and faction, then logs one line; another GM tab
+ * relays the payload with the `renown` request. Read defensively: other fields are never read.
+ */
+function onRenownHook(payload) {
+  const p = M.readRenownHook(payload); if (!p) return;
+  if (!L.isLeader()) { if (game.user?.isGM && openEntry()) L.request("renown", { ...p }); return; }
+  queueRenown(p);
+}
+/** Leader: adds a change to its burst; the line is written once the burst has been quiet for RENOWN_QUIET ms. */
+function queueRenown(p) {
+  if (!R.data?.open) { const j = openEntry(); if (j) load(j); }
+  if (!recording() || !R.renownBursts) return;
+  const key = M.renownKey(p);
+  R.renown.set(key, M.mergeRenown(R.renown.get(key) ?? null, p));
+  R.renownBursts.touch(key, Date.now());
+  clearTimeout(R.renownTimer); R.renownTimer = setTimeout(() => flushRenown(), M.RENOWN_QUIET + 50);
+}
+/** Leader: logs the bursts that are over (`all`: every one, at session end). */
+function flushRenown(all = false) {
+  if (!R.renownBursts) return;
+  const keys = all ? R.renownBursts.all() : R.renownBursts.due(Date.now());
+  for (const key of keys) {
+    const p = R.renown.get(key); R.renown.delete(key); if (!p) continue;
+    const e = M.renownEvent(p, renownNames(p)); if (!e) continue;
+    const a = game.actors.get(p.actorId);
+    record(e.type, e.text, { refs: a ? [a.uuid] : [], data: e.data, private: e.private });
+  }
+  if (R.renownBursts.size) { clearTimeout(R.renownTimer); R.renownTimer = setTimeout(() => flushRenown(), 1000); }
+}
+/**
+ * Names for a renown line, read on this (GM) client: the character from game.actors, the faction and its tiers from the toolkit's
+ * `api.renown` (`faction(id)`: GMs get hidden factions with `hidden: true`; `tiers()` the shared set when the faction has none of its
+ * own). A faction that can't be read counts as hidden, so the line stays GM only.
+ * @param {{ actorId: string, factionId: string, tierBefore: number, tierAfter: number }} p
+ */
+function renownNames(p) {
+  const out = { actor: game.actors.get(p.actorId)?.name ?? "", faction: "", hidden: true, tier: "", tierBefore: "" };
+  try {
+    const tk = game.modules.get(TK); const api = tk?.active ? tk.api?.renown : null;
+    const f = game.user?.isGM ? api?.faction?.(p.factionId) : null;
+    if (f && typeof f === "object" && f.id === p.factionId) {
+      out.faction = String(f.name ?? ""); out.hidden = f.hidden !== false;
+      const own = Array.isArray(f.tiers) && f.tiers.length ? f.tiers : null;
+      const tiers = own ?? (() => { const t = api?.tiers?.(); return Array.isArray(t) ? t : []; })();
+      const name = i => (i >= 0 && tiers[i] && typeof tiers[i] === "object" ? String(tiers[i].name ?? "") : "");
+      out.tier = name(p.tierAfter); out.tierBefore = name(p.tierBefore);
+    }
+  } catch { out.hidden = true; }
+  return out;
+}
+
 /** The companion toolkit: its quests (journal flags and hook), journeys (hook), Travel Log page and loot roll cards. Read only. */
 function toolkitHooks() {
   // The toolkit's hooks are listened to even if it isn't active yet: they fire only when it is. Ids and display names only.
   if (F.on("questEvents")) Hooks.on(M.TOOLKIT_HOOKS.questUpdated, onQuestHook);
   if (F.on("journeys")) Hooks.on(M.TOOLKIT_HOOKS.journey, onJourneyHook);
+  if (F.on("renownEvents")) Hooks.on(M.TOOLKIT_HOOKS.renownChanged, onRenownHook);
   if (!game.modules.get(TK)?.active) return;
   if (F.on("questEvents")) {
     Hooks.on("createJournalEntry", j => { if (j.flags?.[TK]?.quest) questChanged(j); });
@@ -571,6 +630,7 @@ export function ready() {
   if (F.on("previously")) L.handle("previously", (d, user) => { if (user?.isGM && d.recap) L.broadcastHook(HOOKS.previouslyOn, { recap: d.recap, force: !!d.force }); });
   if (F.on("questEvents")) L.handle("quest", (d, user) => { if (user?.isGM) { const p = M.readQuestHook(d); if (p) questChanged(game.journal.get(p.questId), p.change); } });
   if (F.on("journeys")) L.handle("journey", (d, user) => { if (user?.isGM) { const j = M.readJourney(d); if (j) logJourney(j); } });
+  if (F.on("renownEvents")) L.handle("renown", (d, user) => { if (user?.isGM) { const p = M.readRenownHook(d); if (p) queueRenown(p); } });
   L.handle("rest", (d, user) => {
     if (!user) return;
     /** @type {any} */ let a = null; try { a = fromUuidSync(d.uuid, { strict: false }); } catch { }

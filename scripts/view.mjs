@@ -96,6 +96,7 @@ export const FILTERS = Object.freeze({
   world: ["rest", "time", "journal", "npc", "level"],
   quests: ["quest", "objective"],
   travel: ["travel"],
+  renown: ["renown"],
   notes: ["note"]
 });
 /** Rows the dashboard timeline shows at most. */

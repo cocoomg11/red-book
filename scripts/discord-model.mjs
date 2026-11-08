@@ -80,6 +80,9 @@ export function summaryText(sum, labels = {}) {
   const notable = (sum.notable ?? []).filter(x => !questSet.has(x));
   if (notable.length) lines.push("", "**Notable moments**", ...notable.slice(0, 10).map(x => `• ${md(x)}`));
   if (quests.length) lines.push("", "**Quests**", ...quests.slice(0, 15).map(x => `• ${md(x)}`));
+  // 0.9.0: renown with visible factions only (hidden factions' rows are private).
+  const renown = (Array.isArray(sum.renown) ? sum.renown : []).filter(r => r && !r.private).map(r => String(r.text));
+  if (renown.length) lines.push("", "**Renown**", ...renown.slice(0, 15).map(x => `• ${md(x)}`));
   const threads = (sum.threads ?? []).filter(x => x && !x.private).map(x => String(x.text));
   if (threads.length) lines.push("", "**Open threads**", ...threads.slice(0, 10).map(x => `• ${md(x)}`));
   return lines.join("\n").trim();

@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.9.0 (2026-11-08)
+
+Renown from Wanderer's Toolkit in the session log. This release also carries the unreleased **0.8.6** (the move to wanderers-core 0.6.0, below): publish 0.9.0 and both reach users together.
+
+### Added
+- **Renown in the log** (feature `renownEvents`, on by default, needs the session log). With Wanderer's Toolkit 2.2+ (its *Renown* and *Hooks for other modules* on), every saved renown change (an award, a quest's renown reward, the GM setting a score, adding or removing another source) becomes a **Renown** line: *Bryn gained 3 renown with The Guild (now 13, Trusted). Reached Trusted!*, *… lost 2 renown …*, *Dropped to Known.* Faction names and tier names are read on the GM client through the toolkit's `api.renown`.
+- **Merged repeats**: changes for the same character and faction less than 5 seconds apart become one line with the net change (a burst is logged at most 30 s after it began; anything waiting is logged when the session ends).
+- **Summary › Renown**: the net change per character per faction over the session, with the total and tier reached. It shows in the recap and in the Discord session-end post.
+- **Renown filter chip** on the Session page's timeline.
+- **Hidden factions stay GM only**: their lines go in secret blocks on the timeline and in a *GM-only renown* block in the summary; they are never in the recap, the Discord post or the summary's counts, and the `red-book.eventLogged` hook reports them as a note. A faction Red Book can't read (toolkit inactive, not a GM client) is treated as hidden.
+
+### Under the hood
+- Pure: `session-model.mjs` `readRenownHook` (ids and numbers only, clipped; other fields never read), `renownKey`, `mergeRenown`, `renownEvent`, `renownTotals` / `renownRowText` (summary rows, at most `RENOWN_ROWS_MAX` 100), `TOOLKIT_HOOKS.renownChanged`, event type `renown` (group `toolkit`, so *Event types to log* › toolkit turns it off too). `discord-model.mjs` `summaryText` adds visible Renown rows.
+- New request kind `renown` (`from: "gm"`, schema in `requests.mjs`): a GM tab that isn't recording relays the hook to the recording tab. Only the leader merges and writes.
+- Tests: `tests/v090.test.mjs`.
+
+### Untested in Foundry
+- [ ] Toolkit 2.2+ with Renown and Hooks for other modules on, session open: award 3 renown to one character with a visible faction: one Renown line after about 5 s with the name, the new total and the tier.
+- [ ] Award +1 three times within a few seconds: one line with +3. Award to the party: one line per character.
+- [ ] Cross a tier threshold: the line ends with *Reached <tier>!*; lose renown below it: *Dropped to <tier>.*
+- [ ] Award with a **hidden** faction: the line is in a secret block (GM only) on the timeline page; after End session the summary has a *GM-only renown* block; Share as recap and the Discord post show nothing of it, and the counts don't include it.
+- [ ] Two GM tabs: award from the tab that isn't recording: the line is still logged once (relayed).
+- [ ] Session page: the *Renown* chip filters to renown lines.
+- [ ] End the session within 5 s of an award: the line is logged before the summary.
+- [ ] Turn `renownEvents` off (reload): no Renown lines; the toolkit is unaffected.
+
 ## 0.8.6 (2026-11-08)
 
 Moves to wanderers-core 0.6.0. Nothing changes at the table: no new setting, nothing stored, no migration.

@@ -48,7 +48,7 @@ test("feature registry: stable keys, needs nothing from Foundry; Discord off by 
   const F = await import("../scripts/features.mjs");
   assert.deepEqual(F.FEATURES.map(f => f.key), ["feature-sessionLog", "feature-prepBoard", "feature-sceneCheck", "feature-sessionStart", "feature-whosOnline",
     "feature-questEvents", "feature-journeys", "feature-prepList", "feature-openKey", "feature-previously", "feature-npcsMet", "feature-sessionTimer",
-    "feature-attendance", "feature-gained", "feature-discord"]);
+    "feature-attendance", "feature-gained", "feature-discord", "feature-renownEvents"]);
   assert.ok(F.FEATURES.every(f => f.hint));
   assert.ok(F.FEATURES.every(f => f.default === (f.id !== "discord")));
 });
