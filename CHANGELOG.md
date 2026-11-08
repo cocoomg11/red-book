@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.8.6 (2026-11-08)
+
+Moves to wanderers-core 0.6.0. Nothing changes at the table: no new setting, nothing stored, no migration.
+
+### Changed
+- **wanderers-core 0.5.1 → 0.6.0** (via 0.5.2). Red Book's windows, the Session Start window and the Hub panel pick up core's stylesheet revision 4 (`wc-r4`) through `UI_CLASSES`; revision 4 differs from 3 by the new *heirloom* item quality colour. Red Book uses none of 0.6.0's new guest-page exports. Chat output and journal pages written before the update carry no revision class, so they are unaffected.
+
+### Under the hood
+- CI calls core's `module-checks.yml@v0.6.0`. The 0.7.0 core-pin test now checks that the vendored core, the lock and the CI ref agree instead of a fixed version; the version asserts moved to `tests/v086.test.mjs`.
+
+### Untested in Foundry
+- [ ] Red Book window (every page: Session, Board, Scene check, Data, Health, Discord): looks as before in the light and the dark Foundry theme.
+- [ ] Session Start window: looks as before in both themes; the quiet start banner too.
+- [ ] Who's online Hub panel: looks as before in both themes; drag and fold still work.
+- [ ] Gained this session: reward items still show their quality colours.
+
 ## 0.8.5 (2026-11-07)
 
 ### Fixed

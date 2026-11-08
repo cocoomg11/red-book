@@ -283,7 +283,7 @@ Red Book also reads (0.6.0, feature `gained`, GM clients only, read-only) the to
 
 ### Building from source
 
-Red Book bundles a pinned copy of [wanderers-core](https://github.com/cocoomg11/wanderers-core) (0.5.1: the shared look, the GM-only store, remembered windows and key bindings) in `vendor/wanderers-core/`. Nothing is installed separately; the pin is in `wanderers-core.lock.json`. Never edit it by hand. Update it with `node vendor/wanderers-core/vendor.mjs update X.Y.Z`; `npm run verify-core` checks it matches the pin.
+Red Book bundles a pinned copy of [wanderers-core](https://github.com/cocoomg11/wanderers-core) (0.6.0: the shared look, the GM-only store, remembered windows and key bindings) in `vendor/wanderers-core/`. Nothing is installed separately; the pin is in `wanderers-core.lock.json`. Never edit it by hand. Update it with `node vendor/wanderers-core/vendor.mjs update X.Y.Z`; `npm run verify-core` checks it matches the pin.
 
 `npm test` runs the pure-logic tests with Node's built-in test runner (Node 22); `npm run check` syntax-checks every script; `npm run lint` runs ESLint with core's shared config; `npm run types` runs the JSDoc type check (zero errors). GitHub Actions runs core's shared checks (pin, syntax, lint, types, tests).
 
